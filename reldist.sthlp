@@ -1080,7 +1080,7 @@ help for {hi:reldist}
 
 {pmore}
     Jann, B. (2020). reldist: Stata module for relative distribution analysis. Available from
-    {browse "https://github.com/benjann/reldist"}.
+    {browse "http://ideas.repec.org/c/boc/bocode/s458775.html"}.
 
 
 {marker also_see}{...}
