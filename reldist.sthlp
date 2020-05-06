@@ -1,5 +1,5 @@
 {smcl}
-{* 02may2020}{...}
+{* 06may2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -28,7 +28,7 @@ help for {hi:reldist}
 {cmd:reldist} {it:subcmd}
     {varname}
     {ifin} {weight}{cmd:,}  {cmd:by(}{help varname:{it:groupvar}}{cmd:)}
-    [ {cmd:swap} {help reldist##opts:{it:options}} ]
+    [ {help reldist##opts:{it:options}} ]
 
 {pmore}Paired relative distribution (syntax 2)
 
@@ -70,7 +70,11 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt swap}}reverse order of groups (syntax 1 only)
     {p_end}
+{synopt:{opt pool:ed}}use pooled distribution as reference distribution
+    {p_end}
 {synopt:{cmdab:adj:ust(}{help reldist##adjust:{it:spec}}{cmd:)}}location and scale adjustment (not allowed for {cmd:mrp})
+    {p_end}
+{synopt:{cmdab:bal:ance(}{it:{help varlist:xvars}}[{cmd:,} {help reldist##balance:{it:opts}}]{cmd:)}}balance covariates (syntax 1 only)
     {p_end}
 
 {syntab:Subcommand {cmd:pdf}}
@@ -87,11 +91,15 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
+{synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
+    {p_end}
 
 {syntab:Subcommand {cmd:histogram}}
 {synopt:{opt n(#)}}number of histogram bins; default is {cmd:n(10)}
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
+    {p_end}
+{synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
     {p_end}
 
 {syntab:Subcommand {cmd:cdf}}
@@ -102,6 +110,8 @@ help for {hi:reldist}
 {synopt:{cmd:atx(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on outcome scale
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
+    {p_end}
+{synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
     {p_end}
 
 {syntab:Subcommand {cmd:mrp}}
@@ -214,8 +224,6 @@ help for {hi:reldist}
     {p_end}
 {synopt:{cmdab:oti:tle(}{help title_options:{it:tinfo}}{cmd:)}}title for outcome scale axis
     {p_end}
-{synopt:{opt olabq:uick}}compute approximate positions based on stored results
-    {p_end}
 
 {syntab:General graph options}
 {synopt:{cmd:addplot(}{it:{help addplot_option:plot}}{cmd:)}}add other plots to the generated graph
@@ -273,9 +281,10 @@ help for {hi:reldist}
     sample (paired relative distribution).
 
 {pstd}
-    {cmd:reldist} requires {cmd:kdens} and {cmd:moremata}
+    {cmd:reldist} requires {cmd:kdens}, {cmd:kmatch}, and {cmd:moremata}
     to be installed on the system. See
-    {net "describe kdens, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kdens}}
+    {net "describe kdens, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kdens}},
+    {net "describe kmatch, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kmatch}},
     and
     {net "describe moremata, from(http://fmwww.bc.edu/repec/bocode/m/)":{bf:ssc describe moremata}}.
 
@@ -294,6 +303,17 @@ help for {hi:reldist}
 {phang}
     {opt swap} reverses the order of the groups identified by {cmd:by()}. {opt swap} is
     only allowed in syntax 1.
+
+{phang}
+    {opt pooled} uses the pooled distribution across both groups (syntax 1) or across both variables (syntax 2) 
+    as the reference distribution.
+
+{pmore}
+    Note that {helpb reldist##adjust:shape} adjustment of the comparison 
+    distribution is not supported by {cmd:reldist sum} in syntax 2 if option 
+    {cmd:pooled} is specified (because the resulting relative ranks cannot 
+    be stored without changing the data structure in this case). Use syntax 1
+    on reshaped data to perform such an analysis; see help {helpb reshape}.
 
 {marker adjust}{...}
 {phang}
@@ -335,6 +355,42 @@ help for {hi:reldist}
 {phang2}
     {opt log:arithmic} performs the adjustments on logarithmically transformed
     data. The data must be strictly positive in this case.
+
+{marker balance}{...}
+{phang}
+    {cmd:balance(}{it:{help varlist:xvars}}[{cmd:,} {it:options}{cmd:)} balances covariate
+    distributions between the comparison group and the reference group using
+    reweighting, where {it:xvars} specifies the list of covariates to be
+    balanced (only allowed in syntax 1). The balancing weights are obtained
+    using command {helpb kmatch}. {it:options} are as follows:
+
+{phang2}
+    {opt m:ethod(method)} specifies the estimation method to be used. Available
+    methods are {cmd:ipw} (inverse probability weighting), {cmd:eb} (entropy balancing), 
+    {cmd:ps} (propensity score matching), {cmd:md} (multivariate distance matching), and
+    {cmd:em} (exact matching). The default is {cmd:method(ipw)}. See {helpb kmatch}
+    for details on the different methods.
+
+{phang2}
+    {it:{help kmatch:kmatch_options}} are options to be passed through to 
+    {helpb kmatch}. Available options depend on the chosen {it:method}.
+    
+{phang2}
+    {opt ref:erence} reweights the covariate distribution of the reference group. The
+    default is to reweight the covariate distribution of the comparison group. Option
+    {cmd:pooled} is not allowed with {cmd:balance(, reference)}.
+
+{phang2}
+    {opt name(name)} stores the results from {helpb kmatch} under {it:name} using
+    {helpb estimates store}.
+
+{phang2}
+    {opt nowarn} suppresses the warning message that is displayed if not all observations
+    of the relevant target group can be matched due to lack of common support.
+
+{phang2}
+    {opt noi:sily} displays the output from {helpb kmatch}. Specifying {cmd:noisily} twice will 
+    display verbose output from {helpb kmatch}.
 
 {dlgtab:For subcommand -pdf-}
 
@@ -439,6 +495,14 @@ help for {hi:reldist}
     in this case (unless option {cmd:table} is specified). Alternatively, use
     command {cmd:reldist graph} to display the graph after estimation.
 
+{marker ogrid}{...}
+{phang}
+    {opt ogrid(#)} sets the size of the approximation grid for outcome
+    labels. The default is {cmd:ogrid(201)}. The grid will be 
+    used by graph option {helpb reldist##olabel:olabel()} to determine the
+    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
+    of the grid.
+
 {dlgtab:For subcommand -histogram-}
 
 {phang}
@@ -451,6 +515,13 @@ help for {hi:reldist}
     displays the results in a graph. The coefficients table will be suppressed
     in this case (unless option {cmd:table} is specified). Alternatively, use
     command {cmd:reldist graph} to display the graph after estimation.
+
+{phang}
+    {opt ogrid(#)} sets the size of the approximation grid for outcome
+    labels. The default is {cmd:ogrid(201)}. The grid will be 
+    used by graph option {helpb reldist##olabel:olabel()} to determine the
+    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
+    of the grid.
 
 {dlgtab:Subcommand -cdf-}
 
@@ -485,6 +556,13 @@ help for {hi:reldist}
     displays the results in a graph. The coefficients table will be suppressed
     in this case (unless option {cmd:table} is specified). Alternatively, use
     command {cmd:reldist graph} to display the graph after estimation.
+
+{phang}
+    {opt ogrid(#)} sets the size of the approximation grid for outcome
+    labels. The default is {cmd:ogrid(201)}. The grid will be 
+    used by graph option {helpb reldist##olabel:olabel()} to determine the
+    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
+    of the grid.
 
 {dlgtab:For subcommand -mrp-}
 
@@ -661,6 +739,7 @@ help for {hi:reldist}
 {phang}
     {opt noci} omits the confidence intervals.
 
+{marker olabel}{...}
 {dlgtab:Outcome labels}
 
 {phang}
@@ -671,25 +750,17 @@ help for {hi:reldist}
 
 {pmore}
     where {it:suboptions} are as described in help
-    {it:{help axis_label_options}}.
+    {it:{help axis_label_options}}. The positions of the outcome labels are
+    approximated by linear interpolation form the quantiles stored
+    in {cmd:e(ogrid)}; see option {helpb reldist##ogrid:ogrid()} above.
 
 {phang}
-    {opt otick(spec)} adds outcome ticks on a secondary axis. Syntax of
-    {it:spec} is as for {cmd:olabel()}.
+    {opt otick(spec)} adds outcome ticks on a secondary axis. Syntax 
+    and computation is as for {cmd:olabel()}.
 
 {phang}
     {opt otitle(tinfo)} provides a title for the outcome scale axis. See help
     {it:{help title_options}}.
-
-{phang}
-    {opt olabquick} approximates the positions of the outcome
-    labels/ticks based on linear interpolation of the values stored in
-    {cmd:e(at)} and {cmd:e(atx)}. The approximation will be inaccurate if only
-    few evaluation points were used for the PDF or CDF or if only few histogram
-    bars were computed. The default is to compute exact positions based on the
-    original data that were used for the estimation of the relative
-    distribution. {cmd:olabquick} will be imposed automatically if the original
-    data is no longer available.
 
 {pstd}
     Technical note: There is an undocumented command called {cmd:reldist olabel} that can be
@@ -700,14 +771,12 @@ help for {hi:reldist}
 
 {p 8 17 2}
     {cmd:reldist} {opt olab:el} [{it:{help numlist}}] [{cmd:,}
-        {opth for:mat(%fmt)} {opth otic:k(numlist)} {opt quick} ]
+        {opth for:mat(%fmt)} {opth otic:k(numlist)} ]
 
 {pstd}
     where {it:numlist} specifies values for which labels be generated,
-    {cmd:format()} specifies the display format for the labels, {cmd:otick()}
-    specifies values for which ticks be generated, and {cmd:quick} causes the
-    approximate method to be used (see above; {cmd:quick} will be imposed
-    automatically if the original data is no longer available). The command
+    {cmd:format()} specifies the display format for the labels, and {cmd:otick()}
+    specifies values for which ticks be generated. The command
     returns the following macros in {cmd:r()}:
 
 {p2colset 9 22 22 2}{...}
@@ -718,8 +787,6 @@ help for {hi:reldist}
 {p2col:{cmd:r(tick)}}tick specification for use in an {helpb axis_label_options:xtick()} option
     {p_end}
 {p2col:{cmd:r(tick_x)}}expanded and sorted {it:numlist} from {cmd:otick()}
-    {p_end}
-{p2col:{cmd:r(quick)}}{cmd:quick} or empty
     {p_end}
 
 {dlgtab:General graph options}
@@ -875,6 +942,35 @@ help for {hi:reldist}
 
         . {stata reldist mrp ln_wage88 ln_wage78, vce(bootstrap, reps(100))}
 
+{dlgtab:Covariate balancing}
+
+{pstd}
+    The {helpb reldist##balance:balance()} option can be used to balance covariate 
+    distributions before computing the relative distribution. Example:
+
+        . {stata sysuse nlsw88, clear}
+{p 8 12 2}
+        . {stata reldist pdf wage, by(union) balance(grade i.race ttl_exp) notable}
+        {p_end}
+        . {stata estimates store balanced}
+{p 8 12 2}
+        . {stata reldist pdf wage if e(sample), by(union) notable}
+        {p_end}
+        . {stata estimates store raw}
+{p 8 12 2}
+        . {stata coefplot raw balanced, at(at) noci recast(line) lw(*2) yline(1)}
+        {p_end}
+
+{pstd}
+    We see that balancing the specified covariances makes the wage distribution between 
+    unionized and non-unionized workers somewhat more similar, but not very much.
+
+{pstd}
+    By default, inverse-probability weighting is used to balance the
+    covariates. However, you may also use more sophisticates methods such as 
+    entropy balancing or nearest-neighbor matching; see the {helpb reldist##balance:balance()}
+    option above.
+
 {dlgtab:Location and shape decompositions}
 
 {pstd}
@@ -989,7 +1085,8 @@ help for {hi:reldist}
 {synopt:{cmd:e(N0)}}number of observations in reference group (syntax 1 only){p_end}
 {synopt:{cmd:e(by1)}}value of comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(by0)}}value of reference group (syntax 1 only){p_end}
-{synopt:{cmd:e(N_over)}}number over-groups (if {cmd:over()} had been specified){p_end}
+{synopt:{cmd:e(Nout)}}number of unmatched observations (if {cmd:balance()} has been specified){p_end}
+{synopt:{cmd:e(N_over)}}number over-groups (if {cmd:over()} has been specified){p_end}
 {synopt:{cmd:e(n)}}number of evaluation points ({cmd:pdf} and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(bwidth)}}bandwidth of kernel ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(bwadjust)}}bandwidth adjustment factor ({cmd:pdf} only){p_end}
@@ -1012,12 +1109,17 @@ help for {hi:reldist}
 {synopt:{cmd:e(by1lab)}}label of comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(by0lab)}}label of reference group (syntax 1 only){p_end}
 {synopt:{cmd:e(refvar)}}name of {it:refvar} (syntax 2 only){p_end}
+{synopt:{cmd:e(pooled)}}{cmd:pooled} or empty{p_end}
 {synopt:{cmd:e(adjust)}}list of comparison distribution adjustments{p_end}
 {synopt:{cmd:e(refadjust)}}list of reference distribution adjustments{p_end}
 {synopt:{cmd:e(adjmean)}}{cmd:mean} or empty{p_end}
 {synopt:{cmd:e(adjsd)}}{cmd:sd} or empty{p_end}
 {synopt:{cmd:e(adjlog)}}{cmd:logarithmic} or empty{p_end}
 {synopt:{cmd:e(adjmult)}}{cmd:multiplicative} or empty{p_end}
+{synopt:{cmd:e(balance)}}list of balancing variables{p_end}
+{synopt:{cmd:e(balmethod)}}balancing method{p_end}
+{synopt:{cmd:e(balref)}}{cmd:reference} or empty{p_end}
+{synopt:{cmd:e(balopts)}}options passed through to {cmd:kmatch}{p_end}
 {synopt:{cmd:e(over)}}name of {it:overvar}{p_end}
 {synopt:{cmd:e(over_namelist)}}values of over variable{p_end}
 {synopt:{cmd:e(over_labels)}}values of over variable{p_end}
@@ -1038,6 +1140,7 @@ help for {hi:reldist}
 {synopt:{cmd:e(se)}}standard errors ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(at)}}evaluation points ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(atx)}}outcome values at evaluation points ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
+{synopt:{cmd:e(ogrid)}}outcome label approximation grid ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(_N)}}numbers of obs per over-group (if {cmd:over()} had been specified){p_end}
 {synopt:{cmd:e(_N1)}}numbers of obs per over-group in comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(_N0)}}numbers of obs per over-group in reference group (syntax 1 only){p_end}
@@ -1087,5 +1190,5 @@ help for {hi:reldist}
 {title:Also see}
 
 {psee}
-    Online: help for {helpb cumul}, {helpb kdens}, {helpb moremata}
+    Online: help for {helpb cumul}, {helpb kmatch}, {helpb kdens}, {helpb moremata}
 

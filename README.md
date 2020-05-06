@@ -12,17 +12,18 @@ of the relative distribution, or the relative distribution function (relative
 CDF). Furthermore, it computes relative polarization indices as well as
 descriptive statistics of the relative data, and supports the decomposition of
 the relative distribution by adjusting for location, scale, and shape
-differences.
+differences or for differences in covariate distributions.
 
 To install `reldist` from the SSC Archive, type
 
     . ssc install reldist, replace
 
-in Stata. Stata version 12 or newer is required. Furthermore, the `moremata` and `kdens` 
-packages are required. To install these packages from the SSC Archive, type
+in Stata. Stata version 12 or newer is required. Furthermore, the `moremata`, `kdens`,
+and `kmatch` packages are required. To install these packages from the SSC Archive, type
 
     . ssc install moremata, replace
     . ssc install kdens, replace
+    . ssc install kmatch, replace
 
 ---
 
@@ -34,5 +35,17 @@ Installation from GitHub:
 
 Main changes:
 
+    06may2020 (version 1.1.1):
+    - option balance() added
+    - option pooled added
+    - changed approach for olabel()/otick(); reldist now stores quantiles in e(ogrid)
+      from where the label positions are computed (instead of computing the positions
+      from the original data or e(atx)); option ogrid() can be used to set the
+      size of the grid; default is ogrid(201)
+    - option graph is no longer allowed with vce(bootstrap/jackknife)
+    - reldist failed if weights were specified and the variable containing the
+      weights was abbreviated; this is fixed
+    - fixed some minor issues with output formatting
+
     02may2020 (version 1.1.0):
-    - reldist released on GitHub
+    - reldist released on GitHub and SSC

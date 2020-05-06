@@ -1,4 +1,4 @@
-*! version 1.1.0  02may2020  Ben Jann
+*! version 1.1.1  06may2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -9,6 +9,12 @@ if _rc {
 capt findfile lkdens.mlib
 if _rc {
     di as error "-kdens- is required; type {stata ssc install kdens}"
+    local rc = _rc
+}
+if `rc' error 499
+capt findfile kmatch.ado
+if _rc {
+    di as error "-kmatch- is required; type {stata ssc install kmatch}"
     local rc = _rc
 }
 if `rc' error 499
@@ -64,18 +70,23 @@ end
 
 program Check_vceprefix
     _parse comma lhs 0 : 0
-    syntax [, vce(str) Generate(passthru) atx(passthru) NOSE ///
-        BWidth(str) BWADJust(passthru) * ]
-    local options `generate' `atx' `nose' `options'
+    syntax [, vce(str) Generate(passthru) atx(passthru) ///
+        GRaph GRaph2(passthru) ///
+        BWidth(str) BWADJust(passthru) NOSE * ]
+    local options `generate' `atx' `graph' `graph2' `nose' `options'
     if `"`vce'"'!="" {
         Parse_vceprefix `vce'
         if "`vcecmd'"!="" {
             if "`generate'"!="" {
-                di as err "{bf:generate()} not allowed with {bf:vce(`vcecmd')}"
+                di as err "option {bf:generate()} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
             if `"`atx'"'!="" {
-                di as err "{bf:atx()} not allowed with {bf:vce(`vcecmd')}"
+                di as err "option {bf:atx()} not allowed with {bf:vce(`vcecmd')}"
+                exit 198
+            }
+            if `"`graph'`graph2'"'!="" {
+                di as err "option {bf:graph} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
             if "`nose'"=="" {
@@ -145,31 +156,79 @@ program Replay
     local options `level' `options'
     if "`header'"=="" {
         if `"`e(by)'"'!="" {
-            local line1 `"`e(by)' = "'
-            local line2 `"`line1'"'
-            if `"`e(by1lab)'"'!="" local line1 `"`line1'{res:`e(by1lab)'}"'
-            else                   local line1 `"`line1'{res:`e(by1)'}"'
-            if `"`e(by0lab)'"'!="" local line2 `"`line2'{res:`e(by0lab)'}"'
-            else                   local line2 `"`line2'{res:`e(by0)'}"'
+            local by `"`e(by)'"'
+            if `"`e(by1lab)'"'!="" local by1 `"`e(by1lab)'"'
+            else                   local by1 `"`e(by1)'"'
+            if `"`e(by0lab)'"'!="" local by0 `"`e(by0lab)'"'
+            else                   local by0 `"`e(by0)'"'
+            local lby  = strlen(`"`by'"')
+            local lbyl = max(strlen(`"`by1'"'), strlen(`"`by0'"'))
+            local ll   = `lby' + `lbyl' + 3
+            if `ll'>31 {
+                if `lby'<=14 {
+                    local by1  = abbrev(`"`by1'"', 28 - `lby')
+                    local by0  = abbrev(`"`by0'"', 28 - `lby')
+                }
+                else if `lbyl'<=14 {
+                    local by   = abbrev(`"`by'"', 28 - `lbyl')
+                    local lby  = strlen(`"`by'"')
+                }
+                else {
+                    local by   = abbrev(`"`by'"', 14)
+                    local lby  = 14
+                    local by1  = abbrev(`"`by1'"', 14)
+                    local by0  = abbrev(`"`by0'"', 14)
+                }
+            }
+            local ll = `lby' + strlen(`"`by0'"') + 3
+            local line1 `"`by' = {res:`by1'}"'
+            local line2 `"`by' = {res:`by0'}"'
         }
         else {
-            local line1 `"{res:`e(depvar)'}"'
-            local line2 `"{res:`e(refvar)'}"'
+            local line1 = abbrev(`"`e(depvar)'"', 31)
+            local line1 `"{res:`line1'}"'
+            local line2 = abbrev(`"`e(refvar)'"', 31)
+            local ll = strlen(`"`line2'"')
+            local line2 `"{res:`line2'}"'
         }
-        local line1 = abbrev(`"`line1'"', 31)
-        local line2 = abbrev(`"`line2'"', 31)
         local line1 `" F comparison: `line1'"'
         local line2 `" F0 reference: `line2'"'
+        local j 2
+        if `"`e(pooled)'"'!="" {
+            if `ll'<=22 {
+                local line2 `"`line2' (pooled)"'
+            }
+            else {
+                local ++j
+                local line`j' "               (pooled)"
+            }
+        }
         if `"`e(adjust)'`e(refadjust)'"'!="" {
-            if `"`e(adjust)'"'!=""    local line3 `"{res:`e(adjust)'}"'
-            else                      local line3 `"(none)"'
-            if `"`e(refadjust)'"'!="" local line4 `"{res:`e(refadjust)'}"'
-            else                      local line4 `"(none)"'
-            local line3 `" Adjustment F: `line3'"'
-            local line4 `"           F0: `line4'"'
+            local ++j
+            if `"`e(adjust)'"'!=""    local line`j' `"{res:`e(adjust)'}"'
+            else                      local line`j' `"(none)"'
+            local line`j' `" Adjustment F: `line`j''"'
+            local ++j
+            if `"`e(refadjust)'"'!="" local line`j' `"{res:`e(refadjust)'}"'
+            else                      local line`j' `"(none)"'
+            local line`j' `"           F0: `line`j''"'
             local adjopts `"`e(adjmean)' `e(adjsd)' `e(adjmult)' `e(adjlog)'"'
             local adjopts: list retok adjopts
-            if `"`adjopts'"'!=""  local line5 `"         type: {res:`adjopts'}"'
+            if `"`adjopts'"'!="" {
+                local ++j
+                local line`j' `"         type: {res:`adjopts'}"'
+            }
+        }
+        if `"`e(balance)'"'!="" {
+            local ++j
+            local line`j' " Balancing"
+            if `"`e(balref)'"'!="" local line`j' `"`line`j'' F0"'
+            else                   local line`j' `"`line`j''  F"'
+            local line`j' `"`line`j'': method = {res:`e(balmethod)'}"'
+            local ++j
+            
+            local xvars = abbrev(`"`e(balance)'"',31)
+            local line`j' "        xvars: `xvars'"
         }
         _coef_table_header
         local i 0
@@ -191,7 +250,7 @@ program Replay
                     */ as txt _col(49) "Chi-squared" _col(67) "= " as res %10.0g e(chi2)
             }
         }
-        while (`i'<5) { // flush remaining lines
+        while (`i'<`j') { // flush remaining lines
             if `"`line`++i''"'=="" continue, break
              di as txt `"`line`i''"'
         }
@@ -347,7 +406,7 @@ program _GRAPH_get_CI // obtain CI, if available
 end
 
 program _GRAPH_olab // returns oaxis, twopts
-    syntax [, olabel(str asis) otick(str asis) otitle(str asis) olabquick * ]
+    syntax [, olabel(str asis) otick(str asis) otitle(str asis) * ]
     local twopts `options'
     // otitle
     _parse comma otitle 0 : otitle
@@ -368,9 +427,14 @@ program _GRAPH_olab // returns oaxis, twopts
         local otick `"`anything'"'
         local otickopts `"`options'"'
     }
-    if `"`olabel'`otick'"'=="" exit             // nothing to do
-    if "`olabquick'"!="" local olabquick quick
-    OLABEL `"`olabel'"', otick(`"`otick'"') `format' `olabquick'
+    if `"`olabel'`otick'"'=="" exit     // nothing to do
+    capt confirm matrix e(ogrid)
+    if _rc==1 exit _rc
+    if _rc {
+        di as txt "(matrix {bf:e(ogrid)} does not exist; cannot compute outcome positions)"
+        exit
+    }
+    OLABEL `"`olabel'"', otick(`"`otick'"') `format'
     local olabel `"`r(label)'"'
     local otick  `"`r(tick)'"'
     // returns
@@ -389,16 +453,24 @@ end
 
 program _GRAPH_xyti // return xti, yti
     if `"`e(by)'"'=="" {
-        c_local xti `"`e(refvar)'"'
+        local xti `"`e(refvar)'"'
+        if `"`e(pooled)'"'!="" {
+            local xti `"`xti' (pooled)"'
+        }
+        c_local xti `"`xti'"'
         c_local yti `"`e(depvar)'"'
     }
     else {
         if `"`e(by0lab)'"'!="" {
-            c_local xti `"`e(by0lab)'"'
+            local xti `"`e(by0lab)'"'
         }
         else {
-            c_local xti `"`e(by)' = `e(by0)'"'
+            local xti `"`e(by)' = `e(by0)'"'
         }
+        if `"`e(pooled)'"'!="" {
+            local xti `"`xti' (pooled)"'
+        }
+        c_local xti `"`xti'"'
         if `"`e(by1lab)'"'!="" {
             c_local yti `"`e(by1lab)'"'
         }
@@ -412,13 +484,13 @@ program GRAPH_pdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         noREFline REFOPTs(str) NOHISTogram HISTopts(str) ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) OLABQuick ///
+        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_pdf_histopts, `histopts'
     _GRAPH_get_gropts `options'
      
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `olabquick' `twopts'
+    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
     
     // check number of obs and expand data if necessary
     local n     = e(n)
@@ -497,12 +569,12 @@ program GRAPH_histogram
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         noREFline REFOPTs(str) ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) OLABQuick ///
+        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_get_gropts `options'
      
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `olabquick' `twopts'
+    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
     
     // check number of obs and expand data if necessary
     local n = e(n_hist)
@@ -552,12 +624,12 @@ program GRAPH_cdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         noREFline REFOPTs(str) ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) OLABQuick ///
+        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_get_gropts `options'
     
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `olabquick' `twopts'
+    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
     
     // check number of obs and expand data if necessary
     local n = e(n)
@@ -610,7 +682,7 @@ program OLABEL, rclass
         exit 301
     }
     _parse comma lhs 0 : 0
-    syntax [, OTICk(numlist sort) FORmat(str) quick ]
+    syntax [, OTICk(numlist sort) FORmat(str) ]
     return local tick_x `"`otick'"'
     if `"`format'"'=="" local format "%6.0g"
     confirm format `format'
@@ -618,84 +690,18 @@ program OLABEL, rclass
     syntax [, OLABel(numlist sort) ]
     return local label_x `"`olabel'"'
     if `"`olabel'`otick'"'=="" exit // nothing to do
-    if "`quick'"=="" {
-        capt _OLABEL `"`olabel'"' "`format'" `"`otick'"'
-        if _rc==1 exit _rc // break
-        else if _rc {
-            di as txt "(computing olabels from data failed; " /*
-                */ "using approximate method based on values stored in "/*
-                */ "e(at) and e(atx))"
-            local quick quick
-        }
-    }
-    if "`quick'"!="" {
-        confirm matrix e(at)
-        confirm matrix e(atx)
-        mata: rd_olab_ipolate("olabel", "`format'")
-        mata: rd_olab_ipolate("otick", "")
-    }
+    confirm matrix e(ogrid)
+    mata: rd_olab("olabel", "`format'")
+    mata: rd_olab("otick", "")
     return local label `"`olabel'"'
     return local tick  `"`otick'"'
-    return local quick  "`quick'"
-end
-
-program _OLABEL // returns olabel, otick
-    args olabel format otick
-    
-    // get settings
-    local N         = e(N)
-    local weight    `"`e(wtype)'"'
-    local exp       `"`e(wexp)'"'
-    local depvar    `"`e(depvar)'"'
-    local refvar    `"`e(refvar)'"'
-    local by        `"`e(by)'"'
-    local by1       = e(by1)
-    local by0       = e(by0)
-    local adj1      `"`e(adjust)'"'
-    local adj0      `"`e(refadjust)'"'
-    local adjmean   `"`e(adjmean)'"'
-    local adjsd     `"`e(adjsd)'"'
-    local adjlog    `"`e(adjlog)'"'
-    local adjmult   `"`e(adjmult)'"'
-    
-    // mark sample
-    confirm variable `depvar' `refvar' `by'
-    tempvar touse touse1 touse0 wvar
-    qui gen byte `touse' = e(sample)
-    assert (`touse'<.)
-    if `"`weight'"'!="" {
-        gettoken eq exp : exp, parse("=") // strip "="
-        assert (`"`eq'"' == "=")
-        capt confirm variable `exp'
-        if _rc {
-            qui gen double `wvar' = `exp' if `touse'
-        }
-        else local wvar `exp'
-        local wgt "[`weight'=`wvar']"
-    }
-    _nobs `touse' `wgt', min(0)
-    assert (`N' == r(N))
-    if `"`by'"'!="" {
-        qui gen byte `touse1' = (`touse' & `by'==`by1')
-        qui gen byte `touse0' = (`touse' & `by'==`by0')
-        local refvar `depvar'
-    }
-    else {
-        local touse1 `touse'
-        local touse0 `touse'
-    }
-
-    // compute postions
-    mata: rd_OLABEL()
-    c_local olabel `"`olabel'"'
-    c_local otick  `"`otick'"'
 end
 
 program Parse_syntax    // preprocess syntax: two-sample vs. paired
-                        // returns under syntax 1: 0, depvar, by, swap
-                        // returns under syntax 2: 0, depvar, refvar
+                        // returns under syntax 1: 0, depvar, by, swap, pooled
+                        // returns under syntax 2: 0, depvar, refvar, pooled
     syntax varlist(min=1 max=2 numeric) [if] [in] [fw iw aw pw] ///
-        [, by(varname numeric) swap * ]
+        [, by(varname numeric) swap POOLed * ]
     // Syntax 1: two-sample
     if `"`by'"'!="" {
         if `:list sizeof varlist'>1 {
@@ -706,6 +712,7 @@ program Parse_syntax    // preprocess syntax: two-sample vs. paired
         c_local depvar `varlist'
         c_local by     `by'
         c_local swap   `swap'
+        c_local pooled `pooled'
         exit
     }
     // Syntax 2: paired
@@ -720,13 +727,20 @@ program Parse_syntax    // preprocess syntax: two-sample vs. paired
     c_local 0 `if' `in' [`weight'`exp'], `options'
     c_local depvar: word 1 of `varlist'
     c_local refvar: word 2 of `varlist'
+    c_local pooled `pooled'
 end
 
 program Parse_adjust // parse the adjust() option
                      // returns adj1, ads0, adjmean, adjsd, adjlog, adjmult
-    syntax [anything] [, mean sd LOGarithmic MULTiplicative ]
+    capt n syntax [anything] [, mean sd LOGarithmic MULTiplicative ]
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "(error in option {bf:adjust()})"
+        exit 198
+    }
     if "`logarithmic'"!="" & "`multiplicative'"!="" {
-        di as err "{bf:adjust()}: only one of {bf:logarithmic} and {bf:multiplicative} allowed"
+        di as err "only one of {bf:logarithmic} and {bf:multiplicative} allowed"
+        di as err "(error in option {bf:adjust()})"
         exit 198
     }
     local k 1
@@ -742,7 +756,8 @@ program Parse_adjust // parse the adjust() option
         else if `"`tok'"'==substr("scale",1,max(2,strlen(`"`tok'"'))) {
             local tok scale
             if "`multiplicative'"!="" {
-                di as err "{bf:adjust()}: 'scale' not with option {bf:multiplicative}"
+                di as err "'scale' not with option {bf:multiplicative}"
+                di as err "(error in option {bf:adjust()})"
                 exit 198
             }
         }
@@ -750,7 +765,8 @@ program Parse_adjust // parse the adjust() option
             local tok shape
         }
         else if `"`tok'"'!="" {
-            di as err "{bf:adjust()}: '" `"`tok'"' "' not allowed"
+            di as err "'" `"`tok'"' "' not allowed"
+            di as err "(error in option {bf:adjust()})"
             exit 198
         }
         local adj`k' `adj`k'' `tok'
@@ -822,10 +838,204 @@ program Parse_at   // parse n(), at(), atx() in reldist pdf and reldist cdf
     if "`n'"=="" c_local n 101
 end
 
+program Parse_ogrid 
+    args noogrid ogrid
+    if "`noogrid'"!="" {
+        if "`ogrid'"!="" {
+            di as err "{bf:ogrid()} and {bf:noogrid} not both allowed"
+            exit 198
+        }
+        exit
+    }
+    if "`ogrid'"=="" local ogrid 201
+    c_local ogrid `ogrid'
+end
+
+program Parse_balance
+    gettoken by 0 : 0
+    gettoken pooled 0 : 0
+    if strtrim(`"`0'"')=="" exit
+    if "`by'"=="" {
+        di as err "option {bf:balance()} not allowed in syntax 2"
+        exit 499
+    }
+    _parse comma 0 rhs : 0
+    local 0 `", balance(`0')"'
+    syntax [, balance(str) ]
+    if `"`balance'"'=="" {
+        di as err "{it:varlist} required"
+        di as err "(error in option {bf:balance()})"
+        exit 100
+    }
+    local 0 `"`rhs'"'
+    capt n syntax [, ate att atc ///
+        Method(str) name(name) NOIsily REFerence WGENerate(name) NOGENLIST NOWARN * ]
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "(error in option {bf:balance()})"
+        exit 198
+    }
+    if "`pooled'"!="" & "`reference'"!="" {
+        di as err "option {bf:pooled} not allowed with {bf:balance(, reference)}"
+        exit 198
+    }
+    foreach opt in ate att atc {  // other option to disallow?
+        if `"``opt''"'!="" {
+            di as err "option {bf:`opt'} not allowed"
+            di as err "(error in option {bf:balance()})"
+            exit 198
+        }
+    }
+    if `"`method'"'=="" local method "ipw"
+    if `: list sizeof method'>1 {
+        di as err "too many methods specified"
+        di as err "(error in option {bf:balance()})"
+        exit 198
+    }
+    if !inlist(`"`method'"', "ipw", "eb", "md", "ps", "em") {
+        di as err "method '" `"`method'"' "' not allowed"
+        di as err "(error in option {bf:balance()})"
+        exit 198
+    }
+    c_local bal_varlist   `"`balance'"'
+    c_local bal_method    `method'
+    c_local bal_name      `name'
+    c_local bal_noisily   `noisily'
+    c_local bal_ref       `reference'
+    c_local bal_wvar      `wgenerate'
+    c_local bal_nowarn    `nowarn'
+    c_local bal_opts      `options'
+end
+
+program Balance // returns bal_Nout
+                // may update N, N1, N0
+    args pooled touse touse1 touse0 by by1 by0 wtype wexp over ///
+        wvar method varlist ref name noisily nowarn opts
+    if "`noisily'"=="" {
+        di as txt "(running {cmd:kmatch `method'} to obtain balancing weights)"
+    }
+    else {
+        local opts nogenlist `opts'
+    }
+    if "`wtype'"!="" {
+        if "`wtype'"=="aweight" local wtype iweight // aw not allowed in kmatch
+        local wgt `"[`wtype'`wexp']"'
+    }
+    if "`over'"!="" local opts over(`over') `opts'
+    if "`ref'"==""  local tvalue `by0'
+    else            local tvalue `by1'
+    quietly `noisily' ///
+        kmatch `method' `by' `varlist' `wgt' if `touse', ///
+            att tvalue(`tvalue') wgenerate(`wvar') `opts'
+    // number of observations lost due to lack of common suppott
+    mata st_local("Nout", strofreal(sum(st_matrix("e(_N)")[,2]), "%18.0g"))
+    if (`Nout'>0 & "`nowarn'"=="") {
+        di as err "warning: `Nout' unmatched observations in " _c
+        if "`ref'"=="" di as err "reference " _c
+        else           di as err "comparison " _c
+        di as err "distribution"
+        di as err "         balancing may be poor"
+    }
+    c_local bal_Nout `Nout'
+    // store kmatch results
+    if "`name'"!="" {
+        estimates store `name'
+        di as txt "({cmd:kmatch} results stored under name {cmd:`name'})"
+    }
+    // update estimation sample (additional observation may have been 
+    // excluded due to missing values on covariates)
+    capt assert (`touse'==e(sample))
+    if _rc {
+        qui replace `touse' = 0 if e(sample)==0
+        _nobs `touse' `wgt', min(1)
+        c_local N = r(N)
+        qui replace `touse1' = 0 if `touse'==0
+        _nobs `touse1' `wgt', min(0)
+        c_local N1 = r(N)
+        qui replace `touse0' = 0 if `touse'==0
+        _nobs `touse0' `wgt', min(0)
+        c_local N0 = r(N)
+    }
+    // generate variable containing base weights
+    if ("`wtype'"!="") {
+        tempvar w
+        qui gen double `w' `wexp' if `touse'
+    }
+    else local w 1
+    /*
+    // compensate loss observations due to lack of common support
+    if (`Nout'>0) {
+        if "`over'"=="" {
+            if "`wtype'"!="" {
+                su `w' if `touse' & `by'==`tvalue', meanonly
+                local W1 = r(sum)
+            }
+            else {
+                local W1 = el(e(_N),1,3)
+            }
+            su `wvar' if `touse' & `by'!=`tvalue', meanonly
+            qui replace `wvar' = `wvar' * `W1' / r(sum) if `touse'
+        }
+        else {
+            local i 0
+            foreach o in `e(over_namelist)' {
+                local ++i
+                if el(e(_N),`i',2)==0 continue
+                if "`wtype'"!="" {
+                    su `w' if `touse' & `by'==`tvalue' & `over'==`o', meanonly
+                    local W1 = r(sum)
+                }
+                else {
+                    local W1 = el(e(_N),`i',3)
+                }
+                su `wvar' if `touse' & `by'!=`tvalue' & `over'==`o', meanonly
+                qui replace `wvar' = `wvar' * `W1' / r(sum) if `touse' & `over'==`o'
+            }
+        }
+    }
+    */
+    // update weights if target is pooled sample
+    if "`pooled'"!="" {
+        qui replace `wvar' = `w' + `wvar' if `touse' & `by'!=`tvalue'
+    }
+    // rescale final balancing weights (such that sum of weights is equal to
+    // the original sample size or sum of weights in the reweighted group)
+    if "`over'"=="" {
+        if "`wtype'"!="" {
+            su `w' if `touse' & `by'!=`tvalue', meanonly
+            local W1 = r(sum)
+        }
+        else {
+            qui count if `touse' & `by'!=`tvalue'
+            local W1 = r(N)
+        }
+        su `wvar' if `touse' & `by'!=`tvalue', meanonly
+        qui replace `wvar' = `wvar' * `W1' / r(sum) if `touse'
+    }
+    else {
+        local i 0
+        foreach o in `e(over_namelist)' {
+            local ++i
+            if "`wtype'"!="" {
+                su `w' if `touse' & `by'!=`tvalue' & `over'==`o', meanonly
+                local W1 = r(sum)
+            }
+            else {
+                qui count if `touse' & `by'!=`tvalue' & `over'==`o'
+                local W1 = r(N)
+            }
+            su `wvar' if `touse' & `by'!=`tvalue' & `over'==`o', meanonly
+            qui replace `wvar' = `wvar' * `W1' / r(sum) if `touse' & `over'==`o'
+        }
+    }
+    // set weights to missing in non-reweighted group
+    qui replace `wvar' = . if `touse' & `by'==`tvalue'
+end
+
 program Samplesetup // common function to prepare estimation sample
-            // general returns: wvar, exp, wgt, swgt, N
-            // returns if syntax 1: by1, by0, by1lab, by0lab, refvar, N1, N0
-            // returns if syntax 2: touse1, touse0 
+            // general returns: wvar, exp, wgt, N
+            // returns if syntax 1: by1, by0, by1lab, by0lab, N1, N0
+            // returns if syntax 2: (none)
             // returns if over: N_over, overlevels, over_labels
     args touse touse1 touse0 wvar depvar by swap refvar weight exp over
     if "`weight'"!="" {
@@ -833,12 +1043,11 @@ program Samplesetup // common function to prepare estimation sample
         if _rc {
             qui gen double `wvar' = `exp' if `touse'
         }
-        else local wvar `exp'
-        local wgt "[`weight'=`wvar']"
-        if inlist("`weight'", "iweight", "pweight") {
-            c_local swgt "[aweight=`wvar']"
+        else {
+            unab exp: `exp', min(1) max(1)
+            local wvar `exp'
         }
-        else c_local swgt "`wgt'"
+        local wgt "[`weight'=`wvar']"
         c_local wvar `wvar'
         c_local exp `"= `exp'"'
         c_local wgt "`wgt'"
@@ -868,12 +1077,9 @@ program Samplesetup // common function to prepare estimation sample
         c_local by0lab: label (`by') `by0', strict
         c_local by1 `by1'
         c_local by0 `by0'
-        c_local refvar `depvar'
     }
     else {              // syntax 2
         markout `touse' `refvar'
-        c_local touse1 `touse'
-        c_local touse0 `touse'
     }
     _nobs `touse' `wgt', min(1)
     c_local N = r(N)
@@ -906,30 +1112,28 @@ program Check_adjlog // logarithmic adjustment: assert that y > 0
     }
     if _rc==1 exit _rc // break
     else if _rc {
-        di as err "{bf:logarithmic} only allowed if outcomes are strictly positive"
+        di as err "{bf:logarithmic} adjustment only allowed if outcomes are strictly positive"
         exit 499
     }
 end
 
 program PrepareOver // common function to prepare cycling across over groups
-    args N_over overlevels by touse1 touse0 _N _N1 _N0
+    args N_over overlevels by touse touse1 touse0 _N _N1 _N0
     mat `_N' = J(`N_over',1,.)
     mat rown `_N' = `overlevels'
+    qui gen byte `touse' = .
     if "`by'"!="" {
         mat `_N1' = `_N'
         mat `_N0' = `_N'
         qui gen byte `touse1' = .
         qui gen byte `touse0' = .
     }
-    else {
-        qui gen byte `touse1' = .
-        c_local touse0 `touse1'     // !!!
-    }
 end
 
 program PrepareOverlevel // common function to handle specific over level
-    args i o by touse touse1 touse0 TOUSE1 TOUSE0 _N _N1 _N0 wgt
-    _nobs `touse' `wgt' if `o'
+    args i o by touse touse1 touse0 TOUSE TOUSE1 TOUSE0 _N _N1 _N0 wgt
+    qui replace `touse' = `TOUSE' & `o'
+    _nobs `touse' `wgt'
     mat `_N'[`i',1] = r(N)
     if "`by'"!="" {
         qui replace `touse1' = `TOUSE1' & `o'
@@ -939,17 +1143,14 @@ program PrepareOverlevel // common function to handle specific over level
         _nobs `touse0' `wgt', min(0)
         mat `_N0'[`i',1] = r(N)
     }
-    else {
-        qui replace `touse1' = `TOUSE1' & `o'
-    }
 end
 
 program PDF, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) ///
-        n(numlist int >0 max=1) ///
-        at(str) atx(str) ///
+    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
+        n(numlist int >0 max=1) at(str) atx(str) ///
+        NOOGRID ogrid(numlist int >0 max=1) ///
         BWidth(str) BWADJust(numlist >0 max=1) ///
         BOundary(str) Kernel(string) ///
         ADAPTive(numlist int >=0 max=1) ///
@@ -972,7 +1173,9 @@ program PDF, eclass
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_adjust `adjust'
+    Parse_balance "`by'" "`pooled'" `balance'
     Parse_at "`n'" `"`at'"' `"`atx'"'
+    Parse_ogrid "`noogrid'" "`ogrid'"
     if "`histogram2'"!=""     local nhist `histogram2'
     else if "`histogram'"!="" local nhist 10
     if "`napprox'"==""        local napprox = max(512, `n'+1)
@@ -991,14 +1194,23 @@ program PDF, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over'
+    markout `touse' `depvar'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
     Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
     
+    // compute weights for balancing
+    if `"`bal_varlist'"'!="" {
+        if "`bal_wvar'"=="" tempvar bal_wvar
+        Balance "`pooled'" `touse' `touse1' `touse0' `by' `by1' `by0' ///
+            "`weight'" `"`exp'"' "" ///
+            `bal_wvar' "`bal_method'" `"`bal_varlist'"' "`bal_ref'" ///
+            "`bal_name'" "`bal_noisily'" "`bal_nowarn'" `"`bal_opts'"'
+    }
+    
     // compute relative PDF
-    tempname b se AT ATX BW DIV CHI2 k_omit
+    tempname b se AT ATX OGRID BW DIV CHI2 k_omit
     scalar `k_omit' = 0
     mata: rd_PDF(`n')
     
@@ -1009,6 +1221,9 @@ program PDF, eclass
     eret local  title    "Relative density function"
     eret matrix at       = `AT'
     eret matrix atx      = `ATX'
+    if "`ogrid'"!="" {
+        eret matrix ogrid    = `OGRID'
+    }
     if "`nose'"=="" {
         eret matrix se = `se'
     }
@@ -1036,12 +1251,18 @@ program PDF, eclass
 end
 
 program PDF_parse_bwmethod  // returns: bwmethod, bwdpi
-    syntax [, Silverman Normalscale Oversmoothed SJpi Dpi Dpi2(numlist int >=0 max=1) ]
+    capt n syntax [, Silverman Normalscale Oversmoothed SJpi Dpi Dpi2(numlist int >=0 max=1) ]
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "(error in option {bf:bwidth()})"
+        exit 198
+    }
     if "`dpi2'"!="" local dpi dpi
     local bwmethod `silverman' `normalscale' `oversmoothed' `sjpi' `dpi'
     if "`bwmethod'"=="" local bwmethod "sjpi"
     if `: list sizeof bwmethod'>1 {
-        di as err "{bf:bwidth()}: may not specify multiple methods"
+        di as err "too many methods specified"
+        di as err "(error in option {bf:bwidth()})"
         exit 198
     }
     if "`dpi2'"=="" local dpi2 2
@@ -1050,11 +1271,17 @@ program PDF_parse_bwmethod  // returns: bwmethod, bwdpi
 end
 
 program PDF_parse_boundary // returns: boundary
-    syntax [, RENorm REFlect lc ]
+    capt n syntax [, RENorm REFlect lc ]
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "(error in option {bf:boundary()})"
+        exit 198
+    }
     local boundary `renorm' `reflect' `lc'
     if "`boundary'"=="" local boundary "renorm"
     if `: list sizeof boundary'>1 {
-        di as err "{bf:boundary()}: may not specify multiple methods"
+        di as err "too many methods specified"
+        di as err "(error in option {bf:boundary()})"
         exit 198
     }
     c_local boundary `boundary'
@@ -1063,25 +1290,37 @@ end
 program HIST, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) ///
+    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
         n(numlist int >0 max=1) ///
+        NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_adjust `adjust'
+    Parse_balance "`by'" "`pooled'" `balance'
     if "`n'"=="" local n 10
+    Parse_ogrid "`noogrid'" "`ogrid'"
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over'
+    markout `touse' `depvar'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
     Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
     
+    // compute weights for balancing
+    if `"`bal_varlist'"'!="" {
+        if "`bal_wvar'"=="" tempvar bal_wvar
+        Balance "`pooled'" `touse' `touse1' `touse0' `by' `by1' `by0' ///
+            "`weight'" `"`exp'"' "" ///
+            `bal_wvar' "`bal_method'" `"`bal_varlist'"' "`bal_ref'" ///
+            "`bal_name'" "`bal_noisily'" "`bal_nowarn'" `"`bal_opts'"'
+    }
+    
     // compute relative PDF
-    tempname b AT ATX k_omit
+    tempname b AT ATX OGRID k_omit
     scalar `k_omit' = 0
     mata: rd_HIST(`n')
     
@@ -1092,6 +1331,9 @@ program HIST, eclass
     eret local  title    "Relative histogram"
     eret matrix at       = `AT'
     eret matrix atx      = `ATX'
+    if "`ogrid'"!="" {
+        eret matrix ogrid    = `OGRID'
+    }
     eret scalar n_hist   = `n'
     eret scalar hwidth   = 1/`n'
 end
@@ -1099,26 +1341,37 @@ end
 program CDF, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) ///
-        n(numlist int >0 max=1) ///
-        at(str) atx(str) ///
+    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
+        n(numlist int >0 max=1) at(str) atx(str) ///
+        NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_adjust `adjust'
+    Parse_balance "`by'" "`pooled'" `balance'
     Parse_at "`n'" `"`at'"' `"`atx'"'
+    Parse_ogrid "`noogrid'" "`ogrid'"
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over'
+    markout `touse' `depvar'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
     Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
     
+    // compute weights for balancing
+    if `"`bal_varlist'"'!="" {
+        if "`bal_wvar'"=="" tempvar bal_wvar
+        Balance "`pooled'" `touse' `touse1' `touse0' `by' `by1' `by0' ///
+            "`weight'" `"`exp'"' "" ///
+            `bal_wvar' "`bal_method'" `"`bal_varlist'"' "`bal_ref'" ///
+            "`bal_name'" "`bal_noisily'" "`bal_nowarn'" `"`bal_opts'"'
+    }
+    
     // compute relative CDF
-    tempname b AT ATX k_omit
+    tempname b AT ATX OGRID k_omit
     scalar `k_omit' = 0
     mata: rd_CDF(`n')
     
@@ -1129,13 +1382,17 @@ program CDF, eclass
     eret local  title    "Cumulative relative distribution"
     eret matrix at       = `AT'
     eret matrix atx      = `ATX'
+    if "`ogrid'"!="" {
+        eret matrix ogrid    = `OGRID'
+    }
     eret scalar n        = `n'
 end
 
 program MRP, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ Over(varname numeric) ///
+    syntax [if] [in] [fw iw aw pw/], [ BALance(str) ///
+        Over(varname numeric) ///
         SCale SCale2(str) MULTiplicative LOGarithmic ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
@@ -1168,6 +1425,7 @@ program MRP, eclass
         }
         local adjlog logarithmic
     }
+    Parse_balance "`by'" "`pooled'" `balance'
     
     // mark sample
     marksample touse
@@ -1177,6 +1435,15 @@ program MRP, eclass
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
     Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
     
+    // compute weights for balancing
+    if `"`bal_varlist'"'!="" {
+        if "`bal_wvar'"=="" tempvar bal_wvar
+        Balance "`pooled'" `touse' `touse1' `touse0' `by' `by1' `by0' ///
+            "`weight'" `"`exp'"' "`over'" ///
+            `bal_wvar' "`bal_method'" `"`bal_varlist'"' "`bal_ref'" ///
+            "`bal_name'" "`bal_noisily'" "`bal_nowarn'" `"`bal_opts'"'
+    }
+    
     // compute polarization statistics
     tempname b btmp k_omit
     scalar `k_omit' = 0
@@ -1184,21 +1451,23 @@ program MRP, eclass
         mata: rd_MRP("`b'")
     }
     else {
+        local TOUSE  `touse'
         local TOUSE1 `touse1'
         local TOUSE0 `touse0'
-        tempname touse1 touse0 _N _N1 _N0 
+        tempname touse touse1 touse0 _N _N1 _N0 
         PrepareOver `N_over' "`overlevels'" "`by'" ///
-            `touse1' `touse0' `_N' `_N1' `_N0'
+            `touse' `touse1' `touse0' `_N' `_N1' `_N0'
         local i 0
         foreach o of local overlevels {
             local ++i
             PrepareOverlevel `i' "`over'==`o'" "`by'" `touse' `touse1' ///
-                `touse0' `TOUSE1' `TOUSE0' `_N' `_N1' `_N0' "`wgt'"
+                `touse0' `TOUSE' `TOUSE1' `TOUSE0' `_N' `_N1' `_N0' "`wgt'"
             mata: rd_MRP("`btmp'")
             mata: rd_FlagOmitted("`btmp'") // stats can be missing if too few obs
             mat coleq `btmp' = "`o'"
             mat `b' = nullmat(`b'), `btmp'
         }
+        local touse `TOUSE'
     }
     
     // returns
@@ -1211,12 +1480,22 @@ end
 program SUM, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) Over(varname numeric) ///
+    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
+        Over(varname numeric) ///
         Statistics(passthru) Generate(name) Replace ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table'
     Parse_adjust `adjust'
+    if "`by'"=="" & "`pooled'"!="" {
+        if `: list posof "shape" in adj1' {
+            di as err "shape adjustment of comparison distribution not " /*
+                */ "supported by {bf:reldist sum} in syntax 2 with option " /*
+                */ "{bf:pooled}; {helpb reshape} the data and use syntax 1"
+            exit 499
+        }
+    }
+    Parse_balance "`by'" "`pooled'" `balance'
     if "`generate'"!="" & "`replace'"=="" {
         confirm new variable `generate'
     }
@@ -1228,6 +1507,22 @@ program SUM, eclass
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
     Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    
+    // compute weights for balancing
+    if `"`bal_varlist'"'!="" {
+        if "`bal_wvar'"=="" tempvar bal_wvar
+        Balance "`pooled'" `touse' `touse1' `touse0' `by' `by1' `by0' ///
+            "`weight'" `"`exp'"' "`over'" ///
+            `bal_wvar' "`bal_method'" `"`bal_varlist'"' "`bal_ref'" ///
+            "`bal_name'" "`bal_noisily'" "`bal_nowarn'" `"`bal_opts'"'
+        tempvar WVAR
+        qui gen double `WVAR' = .
+        local swgt "[aweight=`WVAR']"
+    }
+    else {
+        if inlist("`weight'", "iweight", "pweight") local swgt "[aweight=`wvar']"
+        else                                        local swgt "`wgt'"
+    }
     
     // compute relative ranks and statistics
     tempvar ranks
@@ -1242,16 +1537,17 @@ program SUM, eclass
         mata: rd_FlagOmitted("`b'") // stats can be missing if too few obs
     }
     else {
+        local TOUSE  `touse'
         local TOUSE1 `touse1'
         local TOUSE0 `touse0'
-        tempname touse1 touse0 _N _N1 _N0 
+        tempname touse touse1 touse0 _N _N1 _N0 
         PrepareOver `N_over' "`overlevels'" "`by'" ///
-            `touse1' `touse0' `_N' `_N1' `_N0'
+            `touse' `touse1' `touse0' `_N' `_N1' `_N0'
         local i 0
         foreach o of local overlevels {
             local ++i
             PrepareOverlevel `i' "`over'==`o'" "`by'" `touse' `touse1' ///
-                `touse0' `TOUSE1' `TOUSE0' `_N' `_N1' `_N0' "`wgt'"
+                `touse0' `TOUSE' `TOUSE1' `TOUSE0' `_N' `_N1' `_N0' "`wgt'"
             mata: rd_SUM()
             quietly tabstat `ranks' if `touse' & `over'==`o' `swgt', save `statistics'
             mat `btmp' = r(StatTotal)'
@@ -1260,6 +1556,7 @@ program SUM, eclass
             mat coleq `btmp' = "`o'"
             mat `b' = nullmat(`b'), `btmp'
         }
+        local touse `TOUSE'
     }
     
     // returns
@@ -1327,6 +1624,7 @@ void rd_Post_common_e()
     else {
         st_global("e(refvar)", st_local("refvar"))
     }
+    st_global("e(pooled)",    st_local("pooled"))
     st_global("e(adjust)",    st_local("adj1"))
     st_global("e(refadjust)", st_local("adj0"))
     st_global("e(adjmean)",   st_local("adjmean"))
@@ -1343,6 +1641,13 @@ void rd_Post_common_e()
             stata("ereturn matrix _N1 = " + st_local("_N1"))
             stata("ereturn matrix _N0 = " + st_local("_N0"))
         }
+    }
+    if (st_local("bal_varlist")!="") {
+        st_global("e(balance)",      st_local("bal_varlist"))
+        st_global("e(balmethod)",    st_local("bal_method"))
+        st_global("e(balref)",       st_local("bal_ref"))
+        st_global("e(balopts)",      st_local("bal_opts"))
+        stata("ereturn scalar Nout = " + st_local("bal_Nout"))
     }
     stata("ereturn scalar level = " + st_local("level"))
     stata("ereturn scalar k_omit = " + st_local("k_omit"))
@@ -1380,7 +1685,7 @@ void rd_svmat(`SS' nm, `SR' vnms, `Bool' transpose)
     st_store((1,rows(M)), st_addvar("double",vnms), M)
 }
 
-void rd_olab_ipolate(`SS' nm, `SS' fmt)
+void rd_olab(`SS' nm, `SS' fmt)
 {
     `RC' x, x0, y0
     
@@ -1389,15 +1694,17 @@ void rd_olab_ipolate(`SS' nm, `SS' fmt)
         st_local(nm,"")
         return
     }
-    x0 = st_matrix("e(atx)")'
-    y0 = st_matrix("e(at)")'
-    if (st_global("e(subcmd)")=="pdf") {
-        // (there might be a second equation containing the histogram)
-        x0 = x0[|1\st_numscalar("e(n)")|]
-        y0 = y0[|1\st_numscalar("e(n)")|]
-    }
-    st_local(nm, _rd_OLABEL(mm_ipolate(x0, y0, x, 1), x, fmt))
+    x0 = st_matrix("e(ogrid)")'
+    y0 = rangen(0,1,rows(x0))
+    st_local(nm, _rd_olab_fmt(mm_ipolate(x0, y0, x, 1), x, fmt))
 }
+
+`SS' _rd_olab_fmt(`RC' y, | `RC' x, `SS' fmt)
+{
+    if (fmt=="") return(invtokens(strofreal(y)'))
+    return(invtokens((strofreal(y) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')'))
+}
+
 
 /* Setup for estimation -----------------------------------------------------*/
 
@@ -1409,18 +1716,21 @@ struct `ADJ' {
 }
 
 struct `DATA' {
-    `RC'    y1, w1    // data and weights comparing group
-    `RS'    N1        // N of comparing group
-    `RC'    y0, w0    // data and weights reference group
-    `RS'    N0        // N of referenc group
+    `Bool'  by        // syntax 1
+    `Bool'  pooled    // use pooled reference distribution
+    `Int'   balanced  // balancing: 0 none, 1 comparison, 2 reference
+    `RC'    y1, w1    // data and weights comparison distribution
+    `RS'    N1        // N of comparison distribution
+    `RC'    y0, w0    // data and weights reference distribution
+    `RS'    N0        // N of reference distribution
     `Int'   wtype     // weights: 0 none, 1 fw, 2 pw, 3 aw, 4 iw
-    `Adj'   adj1      // comparison group adjustment
-    `Adj'   adj0      // reference group adjustment
+    `Adj'   adj1      // comparison distribution adjustments
+    `Adj'   adj0      // reference distribution adjustments
     `Bool'  adjmean   // 0 use median, 1 use mean
     `Bool'  adjsd     // 0 use IQR, 1 use sd
     `Int'   adjlink   // 0 linear/additive, 1 logarithmic, 2 multiplicative
-    `PSRC'  Y1, W1    // (adjusted) comparison data
-    `PSRC'  Y0, W0    // (adjusted) reference data
+    `PSRC'  Y1, W1    // (adjusted) comparison distribution
+    `PSRC'  Y0, W0    // (adjusted) reference distribution
     `RC'    ranks     // relative ranks
 }
 
@@ -1463,38 +1773,66 @@ void rd_get_at(`RC' at, `RC' atx, `Int' n)
 void rd_getdata(`Data' data)
 {
     `SS'   weight
-    `Int'  touse1, touse0
+    `Int'  depvar, refvar, touse1, touse0
+    `RC'   w
     
     // setup
-    weight      = st_local("weight")
-    data.wtype  = (weight=="fweight" ? 1 :
-                  (weight=="pweight" ? 2 :
-                  (weight=="aweight" ? 3 :
-                  (weight=="iweight" ? 4 : 0))))
-    touse1      = _st_varindex(st_local("touse1"))
-    touse0      = _st_varindex(st_local("touse0"))
+    data.by       = (st_local("by")!="")
+    data.pooled   = (st_local("pooled")!="")
+    data.balanced = (st_local("bal_varlist")!="") + (st_local("bal_ref")!="")
+    depvar        = st_varindex(st_local("depvar"))
+    if (data.by) {
+        touse1 = st_varindex(st_local("touse1"))
+        if (data.pooled) touse0 = st_varindex(st_local("touse"))
+        else             touse0 = st_varindex(st_local("touse0"))
+        refvar = st_varindex(st_local("depvar"))
+    }
+    else {
+        touse1 = touse0 = st_varindex(st_local("touse"))
+        refvar = st_varindex(st_local("refvar"))
+    }
+    weight     = st_local("weight")
+    data.wtype = (weight=="fweight" ? 1 :
+                 (weight=="pweight" ? 2 :
+                 (weight=="aweight" ? 3 :
+                 (weight=="iweight" ? 4 : 0))))
     
     // comparison group data
-    data.y1 = st_data(., st_local("depvar"), touse1)
-    if (data.wtype) data.w1 = st_data(., st_local("wvar"), touse1)
-    else            data.w1 = 1
-    if (data.wtype>1) { // pw, aw, iw
-        data.N1 = rows(data.y1)
-        data.w1 = data.w1 * data.N1 / quadsum(data.w1) // normalize weights
-    }
-    else if (data.wtype) data.N1 = sum(data.w1) // fw
-    else                 data.N1 =rows(data.y1) // no weights
-
+    data.y1 = st_data(., depvar, touse1)
+    if (data.balanced==1)      data.w1 = st_data(., st_local("bal_wvar"), touse1)
+    else if (data.wtype)       data.w1 = st_data(., st_local("wvar"), touse1)
+    else if (data.balanced==2) data.w1 = J(rows(data.y1),1,1)
+    else                       data.w1 = 1
+    
     // reference group data
-    data.y0 = st_data(., st_local("refvar"), touse0)
-    if (data.wtype) data.w0 = st_data(., st_local("wvar"), touse0)
-    else            data.w0 = 1
-    if (data.wtype>1) { // pw, aw, iw
-        data.N0 = rows(data.y0)
-        data.w0 = data.w0 * data.N0 / quadsum(data.w0) // normalize weights
+    data.y0 = st_data(., refvar, touse0)
+    if (data.balanced==2)      data.w0 = st_data(., st_local("bal_wvar"), touse0)
+    else if (data.wtype)       data.w0 = st_data(., st_local("wvar"), touse0)
+    else if (data.balanced==1) data.w0 = J(rows(data.y0),1,1)
+    else                       data.w0 = 1
+    if (data.by==0 & data.pooled) {
+        data.y0 = data.y0 \ data.y1
+        if (data.wtype) data.w0 = data.w0 \ data.w1
     }
-    else if (data.wtype) data.N0 = sum(data.w0) // fw
-    else                 data.N0 =rows(data.y0) // no weights
+    
+    // set wtype to pw if balanced without base weights
+    if (data.balanced & data.wtype==0) data.wtype = 2
+    
+    // compute N and normalize weights
+    if (data.wtype>1) {     // pw, aw, iw
+        data.N1 = rows(data.y1)
+        data.w1 = data.w1 * data.N1 / quadsum(data.w1)
+        data.N0 = rows(data.y0)
+        data.w0 = data.w0 * data.N0 / quadsum(data.w0)
+    }
+    else if (data.wtype) {  // fw
+        data.N1 = sum(data.w1)
+        data.N0 = sum(data.w0)
+    }
+    else {                  // no weights
+        data.N1 = rows(data.y1)
+        data.N0 = rows(data.y0)
+    }
     
     // adjustment settings
     rd_getadj(data.adj1, "adj1")
@@ -1596,6 +1934,11 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
 void rd_relrank(`Data' data)
 {
     data.ranks = mm_relrank(*data.Y0, *data.W0, *data.Y1, 1)
+}
+
+`RC' rd_ogrid(`Int' n, `Data' data)
+{
+    return(mm_quantile(*data.Y0, *data.W0, rangen(0, 1, n)))
 }
 
 /* PDF estimation -----------------------------------------------------------*/
@@ -1721,6 +2064,15 @@ void rd_PDF(`Int' n)
             st_matrix(st_local("se"), (st_matrix(st_local("se")), J(1,nhist,0)))
             st_matrixcolstripe(st_local("se"), cstripe)
         }
+    }
+    
+    // outcome grid
+    n = strtoreal(st_local("ogrid"))
+    if (n<.) {
+        cstripe = J(n,1,""), "q":+strofreal(1::n)
+        b = rd_ogrid(n, data)
+        st_matrix(st_local("OGRID"), b')
+        st_matrixcolstripe(st_local("OGRID"), cstripe)
     }
 }
 
@@ -1886,6 +2238,15 @@ void rd_HIST(`Int' n)
     st_matrixcolstripe(st_local("AT"), cstripe)
     st_matrix(st_local("ATX"), atx')
     st_matrixcolstripe(st_local("ATX"), cstripe)
+    
+    // outcome grid
+    n = strtoreal(st_local("ogrid"))
+    if (n<.) {
+        cstripe = J(n,1,""), "q":+strofreal(1::n)
+        b = rd_ogrid(n, data)
+        st_matrix(st_local("OGRID"), b')
+        st_matrixcolstripe(st_local("OGRID"), cstripe)
+    }
 }
 
 `RC' _rd_HIST(`Int' n, `Data' data, `RC' at, `RC' atx)
@@ -1933,6 +2294,15 @@ void rd_CDF(`Int' n)
     st_matrixcolstripe(st_local("AT"), cstripe)
     st_matrix(st_local("ATX"), atx')
     st_matrixcolstripe(st_local("ATX"), cstripe)
+    
+    // outcome grid
+    n = strtoreal(st_local("ogrid"))
+    if (n<.) {
+        cstripe = J(n,1,""), "q":+strofreal(1::n)
+        b = rd_ogrid(n, data)
+        st_matrix(st_local("OGRID"), b')
+        st_matrixcolstripe(st_local("OGRID"), cstripe)
+    }
 }
 
 /* MRP estimation -----------------------------------------------------------*/
@@ -1965,6 +2335,7 @@ void rd_MRP(`SS' bnm)
 
 void rd_SUM()
 {
+    `Int'  touse
     `Data' data
     
     // prepare data
@@ -1973,78 +2344,16 @@ void rd_SUM()
     rd_relrank(data)
     
     // return results
-    if (data.adj1.shape) 
-         st_store(., st_local("ranks"), st_local("touse0"), data.ranks)
-    else st_store(., st_local("ranks"), st_local("touse1"), data.ranks)
-    // // check adjustments
-    // data.adjmean, data.adjlink
-    // if (data.adjmean==0) {
-    //      if (data.adjlink==1) { // log
-    //         "location"
-    //         mm_median(log(data.y1),data.w1), data.N1, mm_median(log(*data.Y1),*data.W1), rows(*data.Y1)
-    //         mm_median(log(data.y0),data.w0), data.N0, mm_median(log(*data.Y0),*data.W0), rows(*data.Y0)
-    //         "scale"
-    //         mm_iqrange(log(data.y1),data.w1), data.N1, mm_iqrange(log(*data.Y1),*data.W1), rows(*data.Y1)
-    //         mm_iqrange(log(data.y0),data.w0), data.N0, mm_iqrange(log(*data.Y0),*data.W0), rows(*data.Y0)
-    //     }
-    //     else {
-    //        "location"
-    //        mm_median(data.y1,data.w1), data.N1, mm_median(*data.Y1,*data.W1), rows(*data.Y1)
-    //        mm_median(data.y0,data.w0), data.N0, mm_median(*data.Y0,*data.W0), rows(*data.Y0)
-    //        "scale"
-    //        mm_iqrange(data.y1,data.w1), data.N1, mm_iqrange(*data.Y1,*data.W1), rows(*data.Y1)
-    //        mm_iqrange(data.y0,data.w0), data.N0, mm_iqrange(*data.Y0,*data.W0), rows(*data.Y0)
-    //    }
-    // }
-    // else {
-    //     if (data.adjlink==1) { // log
-    //         "location"
-    //         mean(log(data.y1),data.w1), data.N1, mean(log(*data.Y1),*data.W1), rows(*data.Y1)
-    //         mean(log(data.y0),data.w0), data.N0, mean(log(*data.Y0),*data.W0), rows(*data.Y0)
-    //         "scale"
-    //         sqrt(variance(log(data.y1),data.w1)), data.N1, sqrt(variance(log(*data.Y1),*data.W1)), rows(*data.Y1)
-    //         sqrt(variance(log(data.y0),data.w0)), data.N0, sqrt(variance(log(*data.Y0),*data.W0)), rows(*data.Y0)
-    //    }
-    //    else {
-    //         "location"
-    //         mean(data.y1,data.w1), data.N1, mean(*data.Y1,*data.W1), rows(*data.Y1)
-    //         mean(data.y0,data.w0), data.N0, mean(*data.Y0,*data.W0), rows(*data.Y0)
-    //         "scale"
-    //         sqrt(variance(data.y1,data.w1)), data.N1, sqrt(variance(*data.Y1,*data.W1)), rows(*data.Y1)
-    //         sqrt(variance(data.y0,data.w0)), data.N0, sqrt(variance(*data.Y0,*data.W0)), rows(*data.Y0)
-    //     }
-    // }
-}
-
-/* Obtain ranks of olabel values in reference distribution ------------------*/
-
-void rd_OLABEL()
-{
-    `Data' data
-    `RC' xlab, xtic
-    `SS' fmt
-    
-    // olabel values
-    xlab = strtoreal(tokens(st_local("olabel")))'
-    xtic = strtoreal(tokens(st_local("otick")))'
-    fmt = st_local("format")
-    if (length(xlab)==0 & length(xtic)==0) return // nothing to do
-    
-    // prepare data
-    rd_getdata(data)
-    rd_adjust(data)
-    
-    // obtain positions
-    if (length(xlab)!=0) st_local("olabel", 
-        _rd_OLABEL(mm_relrank(*data.Y0, *data.W0, xlab, 1), xlab, fmt))
-    if (length(xtic)!=0) st_local("otick", 
-        _rd_OLABEL(mm_relrank(*data.Y0, *data.W0, xtic, 1)))
-}
-
-`SS' _rd_OLABEL(`RC' y, | `RC' x, `SS' fmt)
-{
-    if (fmt=="") return(invtokens(strofreal(y)'))
-    return(invtokens((strofreal(y) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')'))
+    if (data.by) {
+        if (data.adj1.shape) {
+            if (data.pooled) touse = st_varindex(st_local("touse"))
+            else             touse = st_varindex(st_local("touse0")) 
+        }
+        else touse = st_varindex(st_local("touse1"))
+    }
+    else touse = st_varindex(st_local("touse"))
+    st_store(., st_local("ranks"), touse, data.ranks)
+    if (data.balanced) st_store(., st_local("WVAR"), touse, *data.W1)
 }
 
 end
