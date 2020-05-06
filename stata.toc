@@ -1,2 +1,2 @@
 v 3
-p reldist
+p reldist Stata module for relative distribution analysis
