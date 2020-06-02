@@ -1,5 +1,5 @@
 {smcl}
-{* 06may2020}{...}
+{* 14may2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -65,10 +65,12 @@ help for {hi:reldist}
 {synoptset 26 tabbed}{...}
 {marker opts}{col 5}{help reldist##options:{it:options}}{col 33}Description
 {synoptline}
-{syntab:Main}
+{syntab:{help reldist##mainopts:Main}}
 {synopt:{opth by(groupvar)}}binary variable that identifies the groups (syntax 1 only)
     {p_end}
 {synopt:{opt swap}}reverse order of groups (syntax 1 only)
+    {p_end}
+{synopt:{opt nomid}}do not use midpoints when computing relative ranks
     {p_end}
 {synopt:{opt pool:ed}}use pooled distribution as reference distribution
     {p_end}
@@ -77,12 +79,14 @@ help for {hi:reldist}
 {synopt:{cmdab:bal:ance(}{it:{help varlist:xvars}}[{cmd:,} {help reldist##balance:{it:opts}}]{cmd:)}}balance covariates (syntax 1 only)
     {p_end}
 
-{syntab:Subcommand {cmd:pdf}}
+{syntab:{help reldist##pdfopts:Subcommand {bf:pdf}}}
 {synopt:{opt n(#)}}number of evaluation points; default is {cmd:n(101)}
     {p_end}
 {synopt:{cmd:at(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on probability scale
     {p_end}
-{synopt:{cmd:atx(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on outcome scale
+{synopt:{cmd:atx}[{cmd:(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}]}evaluate relative density at outcome values
+    {p_end}
+{synopt:{cmd:discrete}}compute relative density for discrete data
     {p_end}
 {synopt:{cmdab:hist:ogram}[{cmd:(}{it:#}{cmd:)}]}include
     histogram using {it:#} bins; default is {it:#} = 10
@@ -94,7 +98,7 @@ help for {hi:reldist}
 {synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
     {p_end}
 
-{syntab:Subcommand {cmd:histogram}}
+{syntab:{help reldist##histopts:Subcommand {bf:histogram}}}
 {synopt:{opt n(#)}}number of histogram bins; default is {cmd:n(10)}
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
@@ -102,19 +106,21 @@ help for {hi:reldist}
 {synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
     {p_end}
 
-{syntab:Subcommand {cmd:cdf}}
+{syntab:{help reldist##cdfopts:Subcommand {bf:cdf}}}
 {synopt:{opt n(#)}}number of evaluation points; default is {cmd:n(101)}
     {p_end}
 {synopt:{cmd:at(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on probability scale
     {p_end}
-{synopt:{cmd:atx(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on outcome scale
+{synopt:{cmd:atx}[{cmd:(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}]}evaluate relative CDF at outcome values
+    {p_end}
+{synopt:{cmd:discrete}}treat data as discrete and evaluate at observed values
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
 {synopt:{opt ogrid(#)} | {opt noogrid}}outcome label approximation grid
     {p_end}
 
-{syntab:Subcommand {cmd:mrp}}
+{syntab:{help reldist##mrpopts:Subcommand {bf:mrp}}}
 {synopt:{cmd:over(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
     {p_end}
 {synopt:{opt mult:iplicative}}use multiplicative (instead of additive) adjustment
@@ -124,7 +130,7 @@ help for {hi:reldist}
 {synopt:{opt sc:ale}[{cmd:(sd)}]}adjust scale between groups
     {p_end}
 
-{syntab:Subcommand {cmd:summarize}}
+{syntab:{help reldist##sumopts:Subcommand {bf:summarize}}}
 {synopt:{cmd:over(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
     {p_end}
 {synopt:{cmdab:s:tatistics(}{help tabstat##statname:{it:statnames}}{cmd:)}}report
@@ -135,7 +141,7 @@ help for {hi:reldist}
 {synopt:{opt r:eplace}}replace existing variable
     {p_end}
 
-{syntab:SE/CI}
+{syntab:{help reldist##seopts:SE/CI}}
 {synopt:{opt l:evel(#)}}set confidence level; default is {cmd:level(95)}
     {p_end}
 {synopt:{cmd:vce(}{help reldist##vce:{it:vcetype}}{cmd:)}}variance estimation method;
@@ -144,7 +150,7 @@ help for {hi:reldist}
 {synopt:{opt nose}}do not compute standard errors
     {p_end}
 
-{syntab:Reporting}
+{syntab:{help reldist##reprtopts:Reporting}}
 {synopt:{opt nohead:er}}suppress display of output header
     {p_end}
 {synopt:[{cmd:{ul:no}}]{cmdab:tab:le}}suppress/enforce display of coefficients table
@@ -202,6 +208,8 @@ help for {hi:reldist}
     {p_end}
 
 {syntab:After subcommand {cmd:cdf}}
+{synopt:{opt noorig:in}}do not add (0,0) coordinate
+    {p_end}
 {synopt:{it:{help cline_options}}}affect rendition of CDF line
     {p_end}
 
@@ -292,6 +300,7 @@ help for {hi:reldist}
 {marker options}{...}
 {title:Options}
 
+{marker mainopts}{...}
 {dlgtab:Main}
 
 {phang}
@@ -305,8 +314,18 @@ help for {hi:reldist}
     only allowed in syntax 1.
 
 {phang}
-    {opt pooled} uses the pooled distribution across both groups (syntax 1) or across both variables (syntax 2) 
-    as the reference distribution.
+    {opt nomid} changes how the relative ranks are computed in case of ties. By
+    default, {cmd:reldist} uses midpoints of the steps in the cumulative
+    distribution for comparison values that have ties in the
+    reverence distribution. This is equivalent to using expected relative ranks
+    from a procedure that breaks ties randomly. It ensures that the average
+    relative rank is equal to 0.5 if the comparison and reference distributions
+    are identical. Specify {cmd:nomid} to assign relative ranks based on full
+    steps in the CDF. Option {cmd:nomid} has no effect for {cmd:reldist cdf}.
+
+{phang}
+    {opt pooled} uses the pooled distribution across both groups (syntax 1) or
+    across both variables (syntax 2) as the reference distribution.
 
 {pmore}
     Note that {helpb reldist##adjust:shape} adjustment of the comparison 
@@ -392,6 +411,7 @@ help for {hi:reldist}
     {opt noi:sily} displays the output from {helpb kmatch}. Specifying {cmd:noisily} twice will 
     display verbose output from {helpb kmatch}.
 
+{marker pdfopts}{...}
 {dlgtab:For subcommand -pdf-}
 
 {phang}
@@ -409,16 +429,30 @@ help for {hi:reldist}
     one of {cmd:n()}, {cmd:at()}, and {cmd:atx()} is allowed.
 
 {phang}
-    {cmd:atx(}{it:numlist}|{it:matname}{cmd:)} specifies a custom grid of
-    evaluation points in terms of outcome values, either by providing a
-    {help numlist:{it:numlist}} or the name of a matrix containing the values
-    (the values will be taken from the first row or the first column of the matrix,
-    depending on which is larger). The provided outcome values will be mapped onto the
-    reference distribution to obtain the evaluation grid (i.e. the evaluation
+    {cmd:atx}[{cmd:(}{it:numlist}|{it:matname}{cmd:)}], specified without argument,
+    causes the relative PDF to be evaluated at each existing outcome value (possibly
+    after applying {cmd:adjust()}), instead of using a regular evaluation grid
+    on the probability scale. As an alternative to using the observed outcome values, 
+    it is also possible to specify a grid of custom values, either by providing a 
+    {help numlist:{it:numlist}} or the name of a matrix containing the values (the
+    values will be taken from the first row or the first column of the matrix,
+    depending on which is larger). The outcome values will be mapped onto the
+    reference distribution to obtain the evaluation grid, that is, the evaluation
     grid will be determined by the relative ranks of the specified outcome
-    values in the reference distribution). Only one of {cmd:n()}, {cmd:at()},
-    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if {cmd:atx()}
-    is specified.
+    values in the reference distribution. Only one of {cmd:n()}, {cmd:at()},
+    {cmd:atx()}, and {cmd:discrete} is allowed. The {cmd:vce()} option is not
+    allowed if {cmd:atx()} is specified.
+
+{phang}
+    {cmd:discrete} causes the data to be treated as discrete. The relative PDF will then 
+    be evaluated at each level of the data as the ratio of the level's frequency
+    between the comparison distribution and the reference distribution 
+    instead of using kernel density estimation, and the result will be displayed as 
+    a step function. Options {cmd:n()}, {cmd:at()}, {cmd:atx()}, 
+    {cmd:adjust()}, {cmd:histogram()}, and {cmd:vce()} are not allowed 
+    if {cmd:discrete} is specified. Furthermore, {cmd:nomid} and 
+    {help reldist##density_options:{it:density_options}} have no effect
+    if {cmd:discrete} is specified.
 
 {phang}
     {cmd:histogram}[{cmd:(}{it:#}{cmd:)}] requests that a histogram is computed in
@@ -495,14 +529,19 @@ help for {hi:reldist}
     in this case (unless option {cmd:table} is specified). Alternatively, use
     command {cmd:reldist graph} to display the graph after estimation.
 
-{marker ogrid}{...}
 {phang}
-    {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid will be 
-    used by graph option {helpb reldist##olabel:olabel()} to determine the
-    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
-    of the grid.
+    {opt ogrid(#)} sets the size of the approximation grid for outcome 
+    labels. The default is {cmd:ogrid(201)}. The grid is stored in {cmd:e(ogrid)} and
+    will be used by graph option {helpb reldist##olabel:olabel()} to determine
+    the positions of outcome labels. Type {cmd:noogrid} to omit the computation
+    of the grid (no outcome labels will then be available for the graph). 
 
+{pmore}
+    If {cmd:atx()} or {cmd:discrete} is specified, outcome labels will
+    be obtained from the information stored in 
+    {cmd:e(at)}. Option {cmd:ogrid()} is not allowed in this case.
+
+{marker histopts}{...}
 {dlgtab:For subcommand -histogram-}
 
 {phang}
@@ -517,12 +556,13 @@ help for {hi:reldist}
     command {cmd:reldist graph} to display the graph after estimation.
 
 {phang}
-    {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid will be 
-    used by graph option {helpb reldist##olabel:olabel()} to determine the
-    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
-    of the grid.
+    {opt ogrid(#)} sets the size of the approximation grid for outcome 
+    labels. The default is {cmd:ogrid(201)}. The grid is stored in {cmd:e(ogrid)} and
+    will be used by graph option {helpb reldist##olabel:olabel()} to determine
+    the positions of outcome labels. Type {cmd:noogrid} to omit the computation
+    of the grid (no outcome labels will then be available for the graph). 
 
+{marker cdfopts}{...}
 {dlgtab:Subcommand -cdf-}
 
 {phang}
@@ -536,20 +576,32 @@ help for {hi:reldist}
     evaluation points between 0 and 1, either by providing a
     {help numlist:{it:numlist}} or the name of a matrix containing the values
     (the values will be taken from the first row or the first column of the matrix,
-    depending on which is larger). Only
-    one of {cmd:n()}, {cmd:at()}, and {cmd:atx()} is allowed.
+    depending on which is larger). Only one of {cmd:n()}, {cmd:at()}, and {cmd:atx()} 
+    is allowed.
 
 {phang}
-    {cmd:atx(}{it:numlist}|{it:matname}{cmd:)} specifies a custom grid of
-    evaluation points in terms of outcome values, either by providing a
-    {help numlist:{it:numlist}} or the name of a matrix containing the values
-    (the values will be taken from the first row or the first column of the matrix,
-    depending on which is larger). The provided outcome values will be mapped onto the
-    reference distribution to obtain the evaluation grid (i.e. the evaluation
-    grid will be determined by the relative ranks of the specified outcome
-    values in the reference distribution). Only one of {cmd:n()}, {cmd:at()},
-    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if {cmd:atx()}
-    is specified.
+    {cmd:atx}[{cmd:(}{it:numlist}|{it:matname}{cmd:)}], specified without argument,
+    causes the relative CDF to be evaluated at each existing outcome value (possibly
+    after applying {cmd:adjust()}), instead of using a regular evaluation grid
+    on the probability scale. That is, specifying {cmd:atx} causes an "exact"
+    relative CDF to be produced. The default method based on a probability grid
+    generates an approximation of this exact CDF; the larger {cmd:n()}, the
+    better the approximation will be. As an alternative to using the observed
+    outcome values, it is also possible to specify a grid of custom values,
+    either by providing a {help numlist:{it:numlist}} or the name of a matrix
+    containing the values (the values will be taken from the first row or the
+    first column of the matrix, depending on which is larger). Only one of
+    {cmd:n()}, {cmd:at()}, and {cmd:atx()} is allowed. The {cmd:vce()} option
+    is not allowed if {cmd:atx()} is specified.
+
+{phang}
+    {cmd:discrete} causes the data to be treated as discrete. The relative CDF
+    will then be evaluated at each observed outcome value instead of using an
+    evaluation grid on the probability scale. {cmd:discrete} leads to the same
+    result as {cmd:atx}, but requires the data to comply with Stata's rules for
+    factor variables (nonnegative and integer values) and labels the output
+    differently. Options {cmd:n()}, {cmd:at()}, {cmd:atx()}, {cmd:adjust()},
+    and {cmd:vce()} are not allowed if {cmd:discrete} is specified.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -558,12 +610,18 @@ help for {hi:reldist}
     command {cmd:reldist graph} to display the graph after estimation.
 
 {phang}
-    {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid will be 
-    used by graph option {helpb reldist##olabel:olabel()} to determine the
-    positions of outcome labels. Type {cmd:noogrid} to omit the computation 
-    of the grid.
+    {opt ogrid(#)} sets the size of the approximation grid for outcome 
+    labels. The default is {cmd:ogrid(201)}. The grid is stored in {cmd:e(ogrid)} and
+    will be used by graph option {helpb reldist##olabel:olabel()} to determine
+    the positions of outcome labels. Type {cmd:noogrid} to omit the computation
+    of the grid (no outcome labels will then be available for the graph). 
 
+{pmore}
+    If {cmd:atx()} or {cmd:discrete} is specified, outcome labels will
+    be obtained from the information stored in 
+    {cmd:e(at)}. Option {cmd:ogrid()} is not allowed in this case.
+
+{marker mrpopts}{...}
 {dlgtab:For subcommand -mrp-}
 
 {phang}
@@ -589,6 +647,7 @@ help for {hi:reldist}
     {cmd:scale(sd)} to use the standard deviation instead of the IQR. {cmd:scale}
     is not allowed if {cmd:multiplicative} is specified.
 
+{marker sumopts}{...}
 {dlgtab:For subcommand -summarize-}
 
 {phang}
@@ -608,6 +667,7 @@ help for {hi:reldist}
 {phang}
     {opt replace} allows replacing an existing variable.
 
+{marker seopts}{...}
 {dlgtab:SE/CI}
 
 {phang}
@@ -646,6 +706,7 @@ help for {hi:reldist}
     {opt nose} prevents {cmd:reldist pdf} from computing standard errors for the
     density estimates. This may save some computer time.
 
+{marker reprtopts}{...}
 {dlgtab:Reporting}
 
 {phang}
@@ -710,6 +771,10 @@ help for {hi:reldist}
 {dlgtab:After subcommand -cdf-}
 
 {phang}
+    {opt noorigin} prevents adding a (0,0) coordinate to the plotted line if
+    the first x-value is larger than 0.
+
+{phang}
     {it:cline_options} affect the rendition of the CDF line. See
     help {it:{help cline_options}}.
 
@@ -743,24 +808,35 @@ help for {hi:reldist}
 {dlgtab:Outcome labels}
 
 {phang}
-    {opt olabel(spec)} adds outcome labels for the
-    reference distribution on a secondary axis. The syntax of {it:spec} is
+    [{cmd:y}]{opt olabel(spec)} adds outcome labels on a secondary 
+    axis. The syntax of {it:spec} is
 
             {it:{help numlist}} [{cmd:,} {it:suboptions} ]
 
 {pmore}
     where {it:suboptions} are as described in help
-    {it:{help axis_label_options}}. The positions of the outcome labels are
-    approximated by linear interpolation form the quantiles stored
-    in {cmd:e(ogrid)}; see option {helpb reldist##ogrid:ogrid()} above.
+    {it:{help axis_label_options}}. Depending on context, the positions of 
+    the outcome labels are obtained form the quantiles stored
+    in {cmd:e(ogrid)} or from the values stored in 
+    {cmd:e(at)}.
+
+{pmore}
+    {cmd:olabel()} adds outcome labels for the reference distribution; {cmd:yolabel()}
+    adds outcome labels for the comparison distribution (only allowed after
+    {cmd:reldist cdf}).
 
 {phang}
-    {opt otick(spec)} adds outcome ticks on a secondary axis. Syntax 
-    and computation is as for {cmd:olabel()}.
+    [{cmd:y}]{opt otick(spec)} adds outcome ticks on a secondary axis. Syntax 
+    and computation is as for {cmd:olabel()}. {cmd:otick()} adds
+    outcome ticks for the reference distribution; {cmd:yotick()} adds outcome
+    ticks for the comparison distribution (only allowed after 
+    {cmd:reldist cdf}).
 
 {phang}
-    {opt otitle(tinfo)} provides a title for the outcome scale axis. See help
-    {it:{help title_options}}.
+    [{cmd:y}]{opt otitle(tinfo)} provides a title for the outcome scale 
+    axis; see help {it:{help title_options}}. {cmd:otitle()} is for the reference
+    distribution; {cmd:yotitle()} is for the comparison distribution (only
+    allowed after {cmd:reldist cdf}).
 
 {pstd}
     Technical note: There is an undocumented command called {cmd:reldist olabel} that can be
@@ -771,13 +847,14 @@ help for {hi:reldist}
 
 {p 8 17 2}
     {cmd:reldist} {opt olab:el} [{it:{help numlist}}] [{cmd:,}
-        {opth for:mat(%fmt)} {opth otic:k(numlist)} ]
+        {opth for:mat(%fmt)} {opth otic:k(numlist)} {opt y} ]
 
 {pstd}
     where {it:numlist} specifies values for which labels be generated,
-    {cmd:format()} specifies the display format for the labels, and {cmd:otick()}
-    specifies values for which ticks be generated. The command
-    returns the following macros in {cmd:r()}:
+    {cmd:format()} specifies the display format for the labels, {cmd:otick()}
+    specifies values for which ticks be generated, and {cmd:y} request outcome labels
+    for the Y axis of the relative CDF (only allowed after 
+    {cmd:reldist cdf}). The command returns the following macros in {cmd:r()}:
 
 {p2colset 9 22 22 2}{...}
 {p2col:{cmd:r(label)}}label specification for use in an {helpb axis_label_options:xlabel()} option
@@ -967,7 +1044,7 @@ help for {hi:reldist}
 
 {pstd}
     By default, inverse-probability weighting is used to balance the
-    covariates. However, you may also use more sophisticates methods such as 
+    covariates. However, you may also use more sophisticated methods such as 
     entropy balancing or nearest-neighbor matching; see the {helpb reldist##balance:balance()}
     option above.
 
@@ -1109,6 +1186,9 @@ help for {hi:reldist}
 {synopt:{cmd:e(by1lab)}}label of comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(by0lab)}}label of reference group (syntax 1 only){p_end}
 {synopt:{cmd:e(refvar)}}name of {it:refvar} (syntax 2 only){p_end}
+{synopt:{cmd:e(nomid)}}{cmd:nomid} or empty{p_end}
+{synopt:{cmd:e(atx)}}{cmd:atx} or empty{p_end}
+{synopt:{cmd:e(discrete)}}{cmd:discrete} or empty{p_end}
 {synopt:{cmd:e(pooled)}}{cmd:pooled} or empty{p_end}
 {synopt:{cmd:e(adjust)}}list of comparison distribution adjustments{p_end}
 {synopt:{cmd:e(refadjust)}}list of reference distribution adjustments{p_end}
@@ -1139,7 +1219,6 @@ help for {hi:reldist}
 {synopt:{cmd:e(b)}}estimates{p_end}
 {synopt:{cmd:e(se)}}standard errors ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(at)}}evaluation points ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
-{synopt:{cmd:e(atx)}}outcome values at evaluation points ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(ogrid)}}outcome label approximation grid ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(_N)}}numbers of obs per over-group (if {cmd:over()} had been specified){p_end}
 {synopt:{cmd:e(_N1)}}numbers of obs per over-group in comparison group (syntax 1 only){p_end}

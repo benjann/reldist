@@ -1,4 +1,4 @@
-*! version 1.1.1  06may2020  Ben Jann
+*! version 1.1.2  02jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -70,10 +70,10 @@ end
 
 program Check_vceprefix
     _parse comma lhs 0 : 0
-    syntax [, vce(str) Generate(passthru) atx(passthru) ///
-        GRaph GRaph2(passthru) ///
+    syntax [, vce(str) Generate(passthru) atx ATX2(passthru) ///
+        GRaph GRaph2(passthru) DISCRete ///
         BWidth(str) BWADJust(passthru) NOSE * ]
-    local options `generate' `atx' `graph' `graph2' `nose' `options'
+    local options `generate' `atx' `atxs2' `graph' `graph2' `discrete' `nose' `options'
     if `"`vce'"'!="" {
         Parse_vceprefix `vce'
         if "`vcecmd'"!="" {
@@ -81,12 +81,16 @@ program Check_vceprefix
                 di as err "option {bf:generate()} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
-            if `"`atx'"'!="" {
+            if `"`atx'`atx2'"'!="" {
                 di as err "option {bf:atx()} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
             if `"`graph'`graph2'"'!="" {
                 di as err "option {bf:graph} not allowed with {bf:vce(`vcecmd')}"
+                exit 198
+            }
+            if "`discrete'"!="" {
+                di as err "option {bf:discrete} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
             if "`nose'"=="" {
@@ -239,8 +243,10 @@ program Replay
                 */ as txt _col(49) "Reference obs"  _col(67) "= " as res %10.0gc e(N0)
         }
         if "`subcmd'"=="pdf" {
-            di as txt `"`line`++i''"' /*
-                */ as txt _col(49) "Bandwidth" _col(67) "= " as res %10.0g e(bwidth)
+            if `"`e(discrete)'"'=="" {
+                di as txt `"`line`++i''"' /*
+                    */ as txt _col(49) "Bandwidth" _col(67) "= " as res %10.0g e(bwidth)
+            }
             if `"`e(divergence)'"'!="" {
                 di as txt `"`line`++i''"' /*
                     */ as txt _col(49) "Divergence" _col(67) "= " as res %10.0g e(divergence)
@@ -279,6 +285,10 @@ program Replay
             }
         }
         _coef_table, `vmatrix' `options'
+        capt confirm matrix e(at)
+        if _rc==0 {
+            di as txt "(evaluation grid stored in {stata matrix list e(at):{bf:e(at)}})"
+        }
     }
     else if "`notable'"=="" {
         di as txt "(coefficients table suppressed)"
@@ -329,7 +339,7 @@ end
 
 program _GRAPH_get_CI // obtain CI, if available
                       // returns hasci, hashci
-    args ll ul n level noci ci nhist nohci
+    args ll ul n offset level noci ci nhist nohci
     if "`nhist'"=="" local nohci nohci
     if "`noci'"!="" & "`nohci'"!="" {
         c_local hasci
@@ -346,11 +356,12 @@ program _GRAPH_get_CI // obtain CI, if available
             di as error "matrix e(`ci') not found"
             exit 111
         }
-        if rowsof(e(`ci'))!=2 | colsof(e(`ci'))!=`n' {
+        if rowsof(e(`ci'))!=2 | colsof(e(`ci'))!=(`n'-("`offset'"!="")) {
             di as error "matrix e(`ci') not conformable"
             exit 499
         }
-        mata: rd_svmat("e(`ci')", ("`ll'", "`ul'"), 1)
+        tempname CI
+        mat `CI' = e(ci)'
         local hasci hasci
     }
     else {
@@ -384,12 +395,22 @@ program _GRAPH_get_CI // obtain CI, if available
         }
         if "`hasci'"!="" {
             tempname CI
-            mat `CI' = r(table)
-            mat `CI' = `CI'[5..6, 1...]
-            mata: rd_svmat("`CI'", ("`ll'", "`ul'"), 1)
+            mat `CI' = r(table)'
+            mat `CI' = `CI'[1..., 5..6]
         }
     }
-    if "`hasci'"=="" {
+    if "`hasci'"!="" {
+        if ("`offset'"!="") {
+            if `"`e(subcmd)'"'=="cdf" {
+                mat `CI' = (0,0) \ `CI'
+            }
+            else if `"`e(subcmd)'"'=="pdf" {
+                mat `CI' = `CI'[1,1...] \ `CI'
+            }
+        }
+        mata: rd_svmat("`CI'", ("`ll'", "`ul'"), 0)
+    }
+    else {
         c_local hasci
         c_local hashci
         exit
@@ -406,7 +427,13 @@ program _GRAPH_get_CI // obtain CI, if available
 end
 
 program _GRAPH_olab // returns oaxis, twopts
-    syntax [, olabel(str asis) otick(str asis) otitle(str asis) * ]
+    _parse comma xy 0 : 0
+    syntax [, `xy'olabel(str asis) `xy'otick(str asis) `xy'otitle(str asis) * ]
+    if "`xy'"=="y" {
+        local olabel `"`yolabel'"'
+        local otick `"`yotick'"'
+        local otitle `"`yotitle'"'
+    }
     local twopts `options'
     // otitle
     _parse comma otitle 0 : otitle
@@ -428,27 +455,30 @@ program _GRAPH_olab // returns oaxis, twopts
         local otickopts `"`options'"'
     }
     if `"`olabel'`otick'"'=="" exit     // nothing to do
-    capt confirm matrix e(ogrid)
-    if _rc==1 exit _rc
-    if _rc {
-        di as txt "(matrix {bf:e(ogrid)} does not exist; cannot compute outcome positions)"
-        exit
+    if (`"`e(atx)'"'=="" & `"`e(discrete)'"'=="") {
+        capt confirm matrix e(ogrid)
+        if _rc==1 exit _rc
+        if _rc {
+            di as txt "(matrix {bf:e(ogrid)} does not exist; cannot compute outcome positions)"
+            exit
+        }
     }
-    OLABEL `"`olabel'"', otick(`"`otick'"') `format'
+    OLABEL `"`olabel'"', otick(`"`otick'"') `format' `xy'
     local olabel `"`r(label)'"'
     local otick  `"`r(tick)'"'
     // returns
+    if "`xy'"=="" local xy x
     if `"`olabel'"'!="" {
-        local twopts xlabel(`olabel', axis(2) `olabopts') `twopts'
+        local twopts `xy'label(`olabel', axis(2) `olabopts') `twopts'
     }
     else {
-        local twopts xlabel(none, axis(2)) `twopts'
+        local twopts `xy'label(none, axis(2)) `twopts'
     }
     if `"`otick'"'!="" {
-        local twopts xtick(`otick', axis(2) `otickopts') `twopts'
+        local twopts `xy'tick(`otick', axis(2) `otickopts') `twopts'
     }
-    c_local oaxis xaxis(1 2) // add to each plot so that axes do not move
-    c_local twopts xtitle(`otitle', axis(2) `otiopts') `twopts'
+    c_local oaxis `xy'axis(1 2) // add to each plot so that axes do not move
+    c_local twopts `xy'title(`otitle', axis(2) `otiopts') `twopts'
 end
 
 program _GRAPH_xyti // return xti, yti
@@ -492,17 +522,26 @@ program GRAPH_pdf
     // obtain original scale labels
     _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
     
-    // check number of obs and expand data if necessary
-    local n     = e(n)
-    local npdf  = e(n)
+    // get data
+    local npdf = e(n)
+    tempname B AT
+    mat `B' = e(b)'
+    mat `AT' = e(at)'
+    mat `AT' = `AT'[1...,1]
+    if `"`e(discrete)'"'!="" {
+        mat `B' = `B'[1,1] \ `B'
+        mat `AT' = 0 \ `AT'
+        local ++npdf
+        local offset offset
+    }
     local nhist = e(n_hist)
     if `nhist'>=. {
         local nhist
         local nohistogram nohistogram
     }
-    else {
-        local n = `n' + `nhist'
-    }
+    
+    // check number of obs and expand data if necessary
+    local n = rowsof(`B')
     if `n'>_N {
         preserve
         qui set obs `n'
@@ -510,15 +549,17 @@ program GRAPH_pdf
     
     // store results to data
     tempname pdf at
-    mata: rd_svmat("e(b)", "`pdf'", 1)
-    mata: rd_svmat("e(at)", "`at'", 1)
+    mata: rd_svmat("`B'", "`pdf'", 0)
+    mata: rd_svmat("`AT'", "`at'", 0)
     
     // obtain CI if available
     tempname ll ul
-    _GRAPH_get_CI `ll' `ul' `n' `"`level'"' "`noci'" "`ci'" ///
+    _GRAPH_get_CI `ll' `ul' `n' "`offset'" `"`level'"' "`noci'" "`ci'" ///
         "`nhist'" "`nohci'"
     
     // compile graph
+    if `"`e(discrete)'"'!="" local connect connect(stepstair)
+    else                     local connect
     local plots
     // - refline
     if "`refline'"=="" {
@@ -541,12 +582,12 @@ program GRAPH_pdf
     if "`hasci'"!="" {
         local plots `plots' /*
             */ (rarea `ll' `ul' `at' in 1/`npdf', `oaxis'/*
-            */ pstyle(ci) `ciopts')
+            */ pstyle(ci) `connect' `ciopts')
     }
     // - pdf
     local plots `plots' /*
         */ (line `pdf' `at' in 1/`npdf', `oaxis'/*
-        */ pstyle(p1) `options')
+        */ pstyle(p1) `connect' `options')
     // - addplot
     if `"`addplot'"'!="" {
         local plots `plots' || `addplot' ||
@@ -590,7 +631,7 @@ program GRAPH_histogram
     
     // obtain CI if available
     tempname ll ul
-    _GRAPH_get_CI `ll' `ul' `n' `"`level'"' "`noci'" "`ci'" 
+    _GRAPH_get_CI `ll' `ul' `n' "" `"`level'"' "`noci'" "`ci'"
     
     // compile graph
     local plots
@@ -623,16 +664,34 @@ end
 program GRAPH_cdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
-        noREFline REFOPTs(str) ///
+        noREFline REFOPTs(str) NOORIGin ///
         OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
+        YOLABel(passthru) YOTICk(passthru) YOTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_get_gropts `options'
     
     // obtain original scale labels
     _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
+    local oaxis0 `oaxis'
+    local oaxis
+    _GRAPH_olab y, `yolabel' `yotick' `yotitle' `twopts'
+    local oaxis `oaxis' `oaxis0'
+    
+    // get coordinates
+    tempname B AT
+    mat `B' = e(b)'
+    mat `AT' = e(at)'
+    mat `AT' = `AT'[1...,1]
+    if "`noorigin'"=="" {
+        if `AT'[1,1]!=0 {
+            mat `B'  = 0 \ `B'
+            mat `AT' = 0 \ `AT'
+            local offset offset
+        }
+    }
     
     // check number of obs and expand data if necessary
-    local n = e(n)
+    local n = rowsof(`B')
     if `n'>_N {
         preserve
         qui set obs `n'
@@ -640,12 +699,12 @@ program GRAPH_cdf
     
     // store results to data
     tempname cdf at
-    mata: rd_svmat("e(b)", "`cdf'", 1)
-    mata: rd_svmat("e(at)", "`at'", 1)
+    mata: rd_svmat("`B'", "`cdf'", 0)
+    mata: rd_svmat("`AT'", "`at'", 0)
     
     // obtain CI if available
     tempname ll ul
-    _GRAPH_get_CI `ll' `ul' `n' `"`level'"' "`noci'" "`ci'" 
+    _GRAPH_get_CI `ll' `ul' `n' "`offset'" `"`level'"' "`noci'" "`ci'" 
     
     // compile graph
     local plots
@@ -664,7 +723,7 @@ program GRAPH_cdf
     // - cdf
     local plots `plots' /*
         */ (line `cdf' `at' in 1/`n', `oaxis'/*
-        */ pstyle(p1) connect(J) `options')
+        */ pstyle(p1) `options')
     // - addplot
     if `"`addplot'"'!="" {
         local plots `plots' || `addplot' ||
@@ -682,7 +741,13 @@ program OLABEL, rclass
         exit 301
     }
     _parse comma lhs 0 : 0
-    syntax [, OTICk(numlist sort) FORmat(str) ]
+    syntax [, OTICk(numlist sort) FORmat(str) y ]
+    if "`y'"!="" {
+        if `"`e(subcmd)'"'!="cdf" {
+            di as err "option {bf:y} only allowed after {bf:reldist cdf}"
+            exit 499
+        }
+    }
     return local tick_x `"`otick'"'
     if `"`format'"'=="" local format "%6.0g"
     confirm format `format'
@@ -690,9 +755,25 @@ program OLABEL, rclass
     syntax [, OLABel(numlist sort) ]
     return local label_x `"`olabel'"'
     if `"`olabel'`otick'"'=="" exit // nothing to do
-    confirm matrix e(ogrid)
-    mata: rd_olab("olabel", "`format'")
-    mata: rd_olab("otick", "")
+    local atx = (`"`e(atx)'"'!="" | `"`e(discrete)'"'!="")
+    if (`atx'==0) {
+        capt confirm matrix e(ogrid)
+        if _rc==1 exit _rc
+        if _rc {
+            di as txt "matrix {bf:e(ogrid)} does not exist; cannot" /*
+                */ " compute outcome positions"
+            exit 499
+        }
+        if "`y'"!="" {
+            if rowsof(e(ogrid))<2 {
+                di as err "matrix {bf:e(ogrid)} has only one row; cannot" /*
+                    */ " compute outcome positions for comparison group"
+                exit 499
+            }
+        }
+    }
+    mata: rd_olab("`y'"!="", `atx', "olabel", "`format'")
+    mata: rd_olab("`y'"!="", `atx', "otick", "")
     return local label `"`olabel'"'
     return local tick  `"`otick'"'
 end
@@ -788,10 +869,25 @@ program Parse_adjust // parse the adjust() option
     c_local adjmult `multiplicative'
 end
 
-program Parse_at   // parse n(), at(), atx() in reldist pdf and reldist cdf
+program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and reldist cdf
                    // returns n, ATX0, atx, AT0, at
-    args n at atx
-    if `"`atx'"'!="" {
+    args n at atx atx2 discrete
+    if "`discrete'"!="" {
+        if "`n'"!="" {
+            di as err "{bf:n()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        if `"`at'"'!="" {
+            di as err "{bf:at()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        if `"`atx'`atx2'"'!="" {
+            di as err "{bf:atx()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        exit
+    }
+    if `"`atx'`atx2'"'!="" {
         if "`n'"!="" {
             di as err "{bf:n()} and {bf:atx()} not both allowed"
             exit 198
@@ -800,19 +896,19 @@ program Parse_at   // parse n(), at(), atx() in reldist pdf and reldist cdf
             di as err "{bf:at()} and {bf:atx()} not both allowed"
             exit 198
         }
-        if `: list sizeof atx'==1 {
-            capt confirm matrix `atx'
+        if `"`atx2'"'=="" exit // atx without argument; use observed values
+        c_local atx atx
+        if `: list sizeof atx2'==1 {
+            capt confirm matrix `atx2'
             if _rc==0 {
-                c_local ATX0 `atx'
-                c_local n = max(rowsof(`atx'), colsof(`atx'))
-                c_local atx
+                c_local ATX0 `atx2'
+                c_local atx2
                 exit
             }
         }
-        local 0 `", atx(`atx')"'
+        local 0 `", atx(`atx2')"'
         syntax [, atx(numlist ascending) ]
-        c_local atx "`atx'"
-        c_local n: list sizeof atx
+        c_local atx2 "`atx2'"
         exit
     }
     if `"`at'"'!="" {
@@ -824,7 +920,6 @@ program Parse_at   // parse n(), at(), atx() in reldist pdf and reldist cdf
             capt confirm matrix `at'
             if _rc==0 {
                 c_local AT0 `at'
-                c_local n = max(rowsof(`at'), colsof(`at'))
                 c_local at
                 exit
             }
@@ -832,14 +927,27 @@ program Parse_at   // parse n(), at(), atx() in reldist pdf and reldist cdf
         local 0 `", at(`at')"'
         syntax [, at(numlist ascending >=0 <=1) ]
         c_local at "`at'"
-        c_local n: list sizeof at
         exit
     }
     if "`n'"=="" c_local n 101
 end
 
 program Parse_ogrid 
-    args noogrid ogrid
+    args noogrid ogrid atx discrete
+    if "`atx'"!="" {
+        if "`ogrid'"!="" {
+            di as err "{bf:ogrid()} and {bf:atx()} not both allowed"
+            exit 198
+        }
+        exit
+    }
+    if "`discrete'"!="" {
+        if "`ogrid'"!="" {
+            di as err "{bf:ogrid()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        exit
+    }
     if "`noogrid'"!="" {
         if "`ogrid'"!="" {
             di as err "{bf:ogrid()} and {bf:noogrid} not both allowed"
@@ -1117,6 +1225,24 @@ program Check_adjlog // logarithmic adjustment: assert that y > 0
     }
 end
 
+program Check_discrete // outcome variable(s) must be integer >=0
+    args touse depvar refvar discrete
+    if "`discrete'"=="" exit
+    capt assert (`depvar'>=0 & trunc(`depvar')==`depvar') if `touse'
+    if _rc {
+        di as err "`depvar': noninteger or negative values not allowed"/*
+        */ " if {bf:discrete} is specified"
+        exit 452
+    }
+    if "`refvar'"=="" exit
+    capt assert (`refvar'>=0 & trunc(`refvar')==`refvar') if `touse'
+    if _rc {
+        di as err "`refvar': noninteger or negative values not allowed"/*
+        */ " if {bf:discrete} is specified"
+        exit 452
+    }
+end
+
 program PrepareOver // common function to prepare cycling across over groups
     args N_over overlevels by touse touse1 touse0 _N _N1 _N0
     mat `_N' = J(`N_over',1,.)
@@ -1149,7 +1275,7 @@ program PDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) at(str) atx(str) ///
+        n(numlist int >0 max=1) at(str) atx ATX2(str) DISCRete NOMID ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         BWidth(str) BWADJust(numlist >0 max=1) ///
         BOundary(str) Kernel(string) ///
@@ -1172,10 +1298,21 @@ program PDF, eclass
     //}
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
+    if "`discrete'"!="" {
+        if `"`adjust'"'!="" {
+            di as err "{bf:adjust()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        if `"`histogram'`histogram2'"'!="" {
+            di as err "{bf:histogram()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        local nose nose // enforce nose
+    }
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    Parse_at "`n'" `"`at'"' `"`atx'"'
-    Parse_ogrid "`noogrid'" "`ogrid'"
+    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'"
+    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'" "`discrete'"
     if "`histogram2'"!=""     local nhist `histogram2'
     else if "`histogram'"!="" local nhist 10
     if "`napprox'"==""        local napprox = max(512, `n'+1)
@@ -1198,7 +1335,8 @@ program PDF, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
-    Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
+    Check_discrete `touse' `depvar' "`refvar'" "`discrete'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1210,9 +1348,9 @@ program PDF, eclass
     }
     
     // compute relative PDF
-    tempname b se AT ATX OGRID BW DIV CHI2 k_omit
+    tempname b se AT OGRID BW DIV CHI2 k_omit
     scalar `k_omit' = 0
-    mata: rd_PDF(`n')
+    mata: rd_PDF(strtoreal("`n'"))
     
     // returns
     eret post `b' [`weight'`exp'], obs(`N') esample(`touse')
@@ -1220,27 +1358,34 @@ program PDF, eclass
     eret local  subcmd   "pdf"
     eret local  title    "Relative density function"
     eret matrix at       = `AT'
-    eret matrix atx      = `ATX'
+    eret local atx       "`atx'"
+    eret local discrete  "`discrete'"
+    eret scalar n        = `n'
     if "`ogrid'"!="" {
         eret matrix ogrid    = `OGRID'
     }
     if "`nose'"=="" {
         eret matrix se = `se'
     }
-    eret scalar n        = `n'
-    eret scalar napprox  = `napprox'
-    eret scalar bwidth   = `BW'
-    if "`bwmethod'"=="dpi" {
-        local bwmethod `bwmethod'(`bwdpi')
+    if "`discrete'"=="" {
+        eret scalar napprox  = `napprox'
+        eret scalar bwidth   = `BW'
+        if "`bwmethod'"=="dpi" {
+            local bwmethod `bwmethod'(`bwdpi')
+        }
+        eret local  bwmethod "`bwmethod'"
+        eret scalar bwadjust = `bwadjust'
+        eret local  kernel   "`kernel'"
+        eret scalar adaptive = `adaptive'
+        eret local  exact    "`exact'"
+        eret local  boundary "`boundary'"
+        eret local  altlbwf  "`altlbwf'"
+        if "`exact'"=="" {
+            eret scalar divergence = `DIV'
+            eret scalar chi2 = `CHI2'
+        }
     }
-    eret local  bwmethod "`bwmethod'"
-    eret scalar bwadjust = `bwadjust'
-    eret local  kernel   "`kernel'"
-    eret scalar adaptive = `adaptive'
-    eret local  exact    "`exact'"
-    eret local  boundary "`boundary'"
-    eret local  altlbwf  "`altlbwf'"
-    if "`exact'"=="" {
+    else {
         eret scalar divergence = `DIV'
         eret scalar chi2 = `CHI2'
     }
@@ -1291,7 +1436,7 @@ program HIST, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) ///
+        n(numlist int >0 max=1) NOMID ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
@@ -1308,7 +1453,7 @@ program HIST, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
-    Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1320,7 +1465,7 @@ program HIST, eclass
     }
     
     // compute relative PDF
-    tempname b AT ATX OGRID k_omit
+    tempname b AT OGRID k_omit
     scalar `k_omit' = 0
     mata: rd_HIST(`n')
     
@@ -1330,7 +1475,6 @@ program HIST, eclass
     eret local  subcmd   "histogram"
     eret local  title    "Relative histogram"
     eret matrix at       = `AT'
-    eret matrix atx      = `ATX'
     if "`ogrid'"!="" {
         eret matrix ogrid    = `OGRID'
     }
@@ -1342,16 +1486,23 @@ program CDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) at(str) atx(str) ///
+        n(numlist int >0 max=1) at(str) atx ATX2(str) DISCRete NOMID ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
+    local nomid nomid // enforce nomid
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
+    if "`discrete'"!="" {
+        if `"`adjust'"'!="" {
+            di as err "{bf:adjust()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+    }
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    Parse_at "`n'" `"`at'"' `"`atx'"'
-    Parse_ogrid "`noogrid'" "`ogrid'"
+    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'"
+    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'" "`discrete'"
     
     // mark sample
     marksample touse
@@ -1359,7 +1510,8 @@ program CDF, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
-    Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    Check_discrete `touse' `depvar' "`refvar'" "`discrete'"
+    Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1371,28 +1523,29 @@ program CDF, eclass
     }
     
     // compute relative CDF
-    tempname b AT ATX OGRID k_omit
+    tempname b AT OGRID k_omit
     scalar `k_omit' = 0
-    mata: rd_CDF(`n')
+    mata: rd_CDF(strtoreal("`n'"))
     
     // returns
     eret post `b' [`weight'`exp'], obs(`N') esample(`touse')
     mata: rd_Post_common_e()
-    eret local  subcmd   "cdf"
-    eret local  title    "Cumulative relative distribution"
-    eret matrix at       = `AT'
-    eret matrix atx      = `ATX'
+    eret local subcmd   "cdf"
+    eret local title    "Cumulative relative distribution"
+    eret matrix at      = `AT'
+    eret local atx      "`atx'"
+    eret local discrete "`discrete'"
     if "`ogrid'"!="" {
-        eret matrix ogrid    = `OGRID'
+        eret matrix ogrid  = `OGRID'
     }
-    eret scalar n        = `n'
+    eret scalar n = `n'
 end
 
 program MRP, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ BALance(str) ///
-        Over(varname numeric) ///
+        Over(varname numeric) NOMID ///
         SCale SCale2(str) MULTiplicative LOGarithmic ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
@@ -1433,7 +1586,7 @@ program MRP, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
-    Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1481,7 +1634,7 @@ program SUM, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        Over(varname numeric) ///
+        Over(varname numeric) NOMID ///
         Statistics(passthru) Generate(name) Replace ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
@@ -1506,7 +1659,7 @@ program SUM, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
-    Check_adjlog `touse' `depvar' `refvar' "`by'" "`adjlog'"
+    Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1591,11 +1744,13 @@ local SR     string rowvector
 local SM     string matrix
 // real
 local RS     real scalar
+local RV     real vector
 local RC     real colvector
 local RR     real rowvector
 local RM     real matrix
 // counters
 local Int    real scalar
+local IntC   real colvector
 // boolean
 local Bool   real scalar
 local TRUE   1
@@ -1624,6 +1779,7 @@ void rd_Post_common_e()
     else {
         st_global("e(refvar)", st_local("refvar"))
     }
+    st_global("e(nomid)",     st_local("nomid"))
     st_global("e(pooled)",    st_local("pooled"))
     st_global("e(adjust)",    st_local("adj1"))
     st_global("e(refadjust)", st_local("adj0"))
@@ -1682,29 +1838,65 @@ void rd_svmat(`SS' nm, `SR' vnms, `Bool' transpose)
 
     if (transpose) M = st_matrix(nm)'
     else           M = st_matrix(nm)
+    if (cols(M)>cols(vnms))      M = M[,1..cols(vnms)]
+    else if (cols(M)<cols(vnms)) vnms = vnms[1..cols(M)]
     st_store((1,rows(M)), st_addvar("double",vnms), M)
 }
 
-void rd_olab(`SS' nm, `SS' fmt)
+void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
 {
-    `RC' x, x0, y0
+    `RR' y, x
+    `RC' p
     
-    x  = strtoreal(tokens(st_local(nm)))'
+    x  = strtoreal(tokens(st_local(nm)))
     if (length(x)==0) {
         st_local(nm,"")
         return
     }
-    x0 = st_matrix("e(ogrid)")'
-    y0 = rangen(0,1,rows(x0))
-    st_local(nm, _rd_olab_fmt(mm_ipolate(x0, y0, x, 1), x, fmt))
+    if (atx) {
+        y = st_matrix("e(at)")[2,]
+        if (cdf) p = st_matrix("e(b)")
+        else     p = st_matrix("e(at)")[1,]
+    }
+    else {
+        y = st_matrix("e(ogrid)")[1+cdf,]
+        p = (0::length(y)-1) / (length(y)-1)
+    }
+    st_local(nm, _rd_olab_fmt(_rd_olab_pos(y, p, x), x, fmt))
 }
 
-`SS' _rd_olab_fmt(`RC' y, | `RC' x, `SS' fmt)
+`RV' _rd_olab_pos(`RV' y, `RV' p, `RV' x)
 {
-    if (fmt=="") return(invtokens(strofreal(y)'))
-    return(invtokens((strofreal(y) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')'))
+    // get positions of x in p = CDF(y)
+    // if x is between two y values: use p of lower y
+    // if x is equal to y:           use max(p) of matching y's
+    // this also implies: if x < min(y):  position = 0
+    //                    if x > max(y):  position = 1
+    `Int' i, n, j, r 
+    `RV'  P
+    
+    n = length(x)
+    P = J(rows(x), cols(x), .)
+    for (i=1; i<=n; i++) {
+        if (x[i] >= y[1]) break
+        P[i] = 0
+    }
+    r = length(y)
+    j = 1
+    for (; i<=n; i++) {
+        for (; j<r; j++) {
+            if (y[j+1] > x[i]) break
+        }
+        P[i] = p[j]
+    }
+    return(P)
 }
 
+`SS' _rd_olab_fmt(`RR' p, | `RR' x, `SS' fmt)
+{
+    if (fmt=="") return(invtokens(strofreal(p)))
+    return(invtokens((strofreal(p) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')))
+}
 
 /* Setup for estimation -----------------------------------------------------*/
 
@@ -1717,6 +1909,8 @@ struct `ADJ' {
 
 struct `DATA' {
     `Bool'  by        // syntax 1
+    `Bool'  method    // 0 continuous (approx), 1 continuous (exact), 2 discrete
+    `Bool'  mid       // use midpoints for relative ranks: 1 yes, 0 no 
     `Bool'  pooled    // use pooled reference distribution
     `Int'   balanced  // balancing: 0 none, 1 comparison, 2 reference
     `RC'    y1, w1    // data and weights comparison distribution
@@ -1745,39 +1939,15 @@ void rd_getadj(`Adj' adj, `SS' lnm)
     adj.shape    = anyof(ADJ, "shape")
 }
 
-void rd_get_at(`RC' at, `RC' atx, `Int' n)
-{
-    if (st_local("atx")!="")       atx = strtoreal(tokens(st_local("atx")))'
-    else if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
-    else if (st_local("at")!="")   at = strtoreal(tokens(st_local("at")))'
-    else if (st_local("AT0")!="") {
-        at = _rd_get_at_mat("AT0")
-        if (any(at:<0) | any(at:>1)) {
-            display("{err}values provided in {bf:at()} must be in [0,1]")
-            exit(error(125))
-        }
-    }
-    else at = rangen(0, 1, n)
-}
-
-`RC' _rd_get_at_mat(`SS' nm)
-{
-    `RM' at
-    
-    at = st_matrix(st_local(nm))'
-    if (cols(at)>rows(at)) at = at'
-    if (cols(at)>1) at = at[,1]
-    return(sort(at,1))
-}
-
 void rd_getdata(`Data' data)
 {
     `SS'   weight
     `Int'  depvar, refvar, touse1, touse0
-    `RC'   w
     
     // setup
     data.by       = (st_local("by")!="")
+    data.mid      = (st_local("nomid")=="")
+    data.method   = (st_local("atx")!="") + 2*(st_local("discrete")!="")
     data.pooled   = (st_local("pooled")!="")
     data.balanced = (st_local("bal_varlist")!="") + (st_local("bal_ref")!="")
     depvar        = st_varindex(st_local("depvar"))
@@ -1931,30 +2101,178 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
     return(&((y :- l) * (s0 / s) :+ l)) // additive
 }
 
-void rd_relrank(`Data' data)
+void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
 {
-    data.ranks = mm_relrank(*data.Y0, *data.W0, *data.Y1, 1)
+    // grid based on outcome values
+    if (data.method) {
+        if (st_local("atx2")!="")      atx = strtoreal(tokens(st_local("atx2")))'
+        else if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
+        else                           atx = uniqrows(*data.Y1 \ *data.Y0)
+        at = mm_relrank(*data.Y0, *data.W0, atx)
+    }
+    // grid based on probabilities
+    else {
+        if (st_local("at")!="") at = strtoreal(tokens(st_local("at")))'
+        else if (st_local("AT0")!="") {
+            at = _rd_get_at_mat("AT0")
+            if (any(at:<0) | any(at:>1)) {
+                display("{err}values provided in {bf:at()} must be in [0,1]")
+                exit(error(125))
+            }
+        }
+        else at = (0::n-1) / (n-1)
+        atx = rd_invcdf(*data.Y0, *data.W0, at)
+        if (at[1]==0) {
+            if (min(*data.Y1)<atx[1]) {
+                // set origin to infimum (i.e. the largest observed value below
+                // the range of Y0)
+                atx[1] = max(select(*data.Y1, *data.Y1:<atx[1]))
+            }
+        }
+    }
+    // set n if not defined yet
+    if (n>=.) {
+        n  = rows(atx)
+        st_local("n", strofreal(n, "%18.0g"))
+    }
 }
 
-`RC' rd_ogrid(`Int' n, `Data' data)
+`RC' _rd_get_at_mat(`SS' nm)
 {
-    return(mm_quantile(*data.Y0, *data.W0, rangen(0, 1, n)))
+    `RM' at
+    
+    at = st_matrix(st_local(nm))'
+    if (cols(at)>rows(at)) at = at'
+    if (cols(at)>1) at = at[,1]
+    return(sort(at,1))
+}
+
+void rd_relrank(`Data' data)
+{
+    data.ranks = mm_relrank(*data.Y0, *data.W0, *data.Y1, data.mid)
+}
+
+`RC' rd_ogrid(`Bool' one, `Int' n, `Data' data)
+{
+    if (one) return(rd_invcdf(*data.Y1, *data.W1, (0::n-1)/(n-1)))
+    return(rd_invcdf(*data.Y0, *data.W0, (0::n-1)/(n-1)))
+}
+
+`RC' rd_invcdf(`RC' X, `RC' w, `RC' P)
+{   // quantile function that is inverse of empirical distribution function
+    // (definition 1 in Hyndman&Fan 1996)
+    // P assumed in [0,1]
+    `Int'  n
+    `IntC' j
+    
+    if (rows(w)!=1) return(_rd_invcdf_w(X, w, P))
+    n = rows(X)
+    if (n==0) return(J(rows(P),1,.))
+    j = ceil(P * n)
+    _editvalue(j, 0, 1) // use minimum if P = 0
+    return(sort(X,1)[j])
+}
+
+`RC' _rd_invcdf_w(`RC' X, `RC' w, `RC' P0)
+{   // P0 assumed sorted
+    `Int'  n, r, i, j
+    `IntC' p
+    `RC'   W, P, Q
+    
+    n = rows(X)
+    if (n==0) return(J(rows(P0),1,.))
+    W = quadsum(w)
+    P = P0 * W
+    p = order(X, 1)
+    W = quadrunningsum(w[p])
+    r = rows(P)
+    Q = J(r,1,.)
+    j = n
+    for (i=r; i; i--) {
+        for (;j>1; j--) {
+            if (W[j-1]<P[i]) break
+        }
+        Q[i] = X[p[j]]
+    }
+    return(Q)
 }
 
 /* PDF estimation -----------------------------------------------------------*/
 
 void rd_PDF(`Int' n)
 {
+    `RC'    at, atx
+    `Data'  data
+    pragma unset at
+    pragma unset atx
+    
+    // prepare data
+    rd_getdata(data)
+    rd_adjust(data)
+    
+    // evaluation grid
+    rd_get_at(data, at, atx, n)
+    
+    // estimation
+    if (data.method==2) rd_PDF_discrete(data, n, at, atx)
+    else                rd_PDF_continuous(data, n, at, atx)
+    
+}
+
+void rd_PDF_discrete(`Data' data, `Int' n, `RC' at, `RC' atx)
+{
+    `Int'   i
+    `RS'    b1, b0, at1, at0
+    `RC'    b, pr
+    `SM'    cstripe
+    
+    // prepare data
+    rd_getdata(data)
+    rd_adjust(data)
+    
+    // evaluation grid
+    rd_get_at(data, at, atx, n)
+    
+    // estimation
+    b = mm_relrank(*data.Y1, *data.W1, atx)
+    b0 = 0; at0 = 0
+    for (i=1;i<=n;i++) {
+        b1 = b[i]; at1 = at[i]
+        b[i] = (b1-b0) / (at1-at0)
+        b0 = b1; at0 = at1
+    }
+    
+    // divergence
+    pr = at - (0 \ at[|1\n-1|])
+    st_numscalar(st_local("DIV"),  sum(b :* ln(b) :* pr))
+    st_numscalar(st_local("CHI2"), sum((b :- 1):^2 :* pr))
+    
+    // // add origin
+    // atx = atx[1] \ atx
+    // at  = 0 \ at
+    // b   = b[1] \ b
+    // n   = rows(b)
+    // st_local("n", strofreal(n, "%18.0g"))
+    
+    // return results
+    cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
+    // cstripe = (J(n,1,""), ("_origin" \ strofreal(atx[|2\n|]):+("."+st_local("depvar"))))
+    st_matrix(st_local("b"), b')
+    st_matrixcolstripe(st_local("b"), cstripe)
+    st_matrix(st_local("AT"), (at, atx)')
+    st_matrixcolstripe(st_local("AT"), cstripe)
+    st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
+}
+
+void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
+{
     `Bool'  exact, altlbwf, pw, nose
     `Int'   adaptive, boundary, n0, nhist
     `RS'    bw, bwdpi, bwadj
     `SS'    bwmethod, kernel
-    `RC'    b, v, at, atx, at0, lbwf, gc
+    `RC'    b, v, at0, lbwf, gc
     `SM'    cstripe
-    `Data'  data
     `PSRCF' lbwffun
-    pragma unset at
-    pragma unset atx
     pragma unset lbwf
     pragma unset gc
     
@@ -1971,20 +2289,11 @@ void rd_PDF(`Int' n)
     boundary = 0 + (st_local("boundary")=="reflect") + 2*(st_local("boundary")=="lc")
     nose     = (st_local("nose")!="")
     nhist    = strtoreal(st_local("nhist"))
+    pw       = (data.wtype==2)
     
-    // evaluation grid: step 1
-    rd_get_at(at, atx, n)
-    
-    // prepare data
-    rd_getdata(data)
-    rd_adjust(data)
+    // compute relative ranks
     rd_relrank(data)
-    pw = (data.wtype==2)
     
-    // evaluation grid: step 2
-    if (length(at)) atx = mm_quantile(*data.Y0, *data.W0, at)
-    else            at  = mm_relrank(*data.Y0, *data.W0, atx, 1)
-
     // bandwidth
     if (bw>=.) {
         bw = rd_PDF_bw(data.ranks, *data.W1, bwmethod, bwdpi, kernel, n0)
@@ -2005,7 +2314,7 @@ void rd_PDF(`Int' n)
             boundary, lbwf, lbwffun)
     }
     else {          // binned approximation estimator: use grid of size n0
-        at0 = rangen(0, 1, n0)
+        at0 = (0::n0-1) / (n0-1)
         b = kdens(data.ranks, *data.W1, at0, bw, kernel, adaptive, 1, 1, 
             boundary, lbwf, gc, 1, lbwffun)
     }
@@ -2027,14 +2336,14 @@ void rd_PDF(`Int' n)
     // return results
     if (nhist<.) cstripe = J(n, 1, "pdf")
     else         cstripe = J(n, 1, "")
-    cstripe = cstripe, "p" :+ strofreal(1::n)
+    if (data.method) cstripe = cstripe, "x" :+ strofreal(1::n)
+    else             cstripe = cstripe, "p" :+ strofreal(1::n)
     if (exact) st_matrix(st_local("b"), b')
     else       st_matrix(st_local("b"), mm_ipolate(at0, b, at)')
     st_matrixcolstripe(st_local("b"), cstripe)
-    st_matrix(st_local("AT"), at')
+    st_matrix(st_local("AT"), (at, atx)')
     st_matrixcolstripe(st_local("AT"), cstripe)
-    st_matrix(st_local("ATX"), atx')
-    st_matrixcolstripe(st_local("ATX"), cstripe)
+    st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     st_numscalar(st_local("BW"), bw)
     st_local("kernel", kernel)
     if (nose==0) {
@@ -2056,10 +2365,8 @@ void rd_PDF(`Int' n)
         cstripe = cstripe \ (J(nhist,1,"histogram"), "h":+strofreal(1::nhist))
         st_matrix(st_local("b"), (st_matrix(st_local("b"))' \ b)')
         st_matrixcolstripe(st_local("b"), cstripe)
-        st_matrix(st_local("AT"), (st_matrix(st_local("AT"))' \ at)')
+        st_matrix(st_local("AT"), (st_matrix(st_local("AT"))' \ (at, atx))')
         st_matrixcolstripe(st_local("AT"), cstripe)
-        st_matrix(st_local("ATX"), (st_matrix(st_local("ATX"))' \ atx)')
-        st_matrixcolstripe(st_local("ATX"), cstripe)
         if (nose==0) {
             st_matrix(st_local("se"), (st_matrix(st_local("se")), J(1,nhist,0)))
             st_matrixcolstripe(st_local("se"), cstripe)
@@ -2070,7 +2377,7 @@ void rd_PDF(`Int' n)
     n = strtoreal(st_local("ogrid"))
     if (n<.) {
         cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(n, data)
+        b = rd_ogrid(0, n, data)
         st_matrix(st_local("OGRID"), b')
         st_matrixcolstripe(st_local("OGRID"), cstripe)
     }
@@ -2234,16 +2541,15 @@ void rd_HIST(`Int' n)
     cstripe = J(n,1,""), "h":+strofreal(1::n)
     st_matrix(st_local("b"), b')
     st_matrixcolstripe(st_local("b"), cstripe)
-    st_matrix(st_local("AT"), at')
+    st_matrix(st_local("AT"), (at, atx)')
     st_matrixcolstripe(st_local("AT"), cstripe)
-    st_matrix(st_local("ATX"), atx')
-    st_matrixcolstripe(st_local("ATX"), cstripe)
+    st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     
     // outcome grid
     n = strtoreal(st_local("ogrid"))
     if (n<.) {
         cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(n, data)
+        b = rd_ogrid(0, n, data)
         st_matrix(st_local("OGRID"), b')
         st_matrixcolstripe(st_local("OGRID"), cstripe)
     }
@@ -2253,11 +2559,11 @@ void rd_HIST(`Int' n)
 {
     `RC' b
     
-    at = rangen(0, 1, n+1)
+    at = (0::n) / n
     b = mm_exactbin(data.ranks, *data.W1, at, 1)
     b = b * (n / mm_nobs(data.ranks, *data.W1))
     at = at[|1 \ n |] :+ .5/n
-    atx = mm_quantile(*data.Y0, *data.W0, at)
+    atx = rd_invcdf(*data.Y0, *data.W0, at)
     return(b)
 }
 
@@ -2271,37 +2577,74 @@ void rd_CDF(`Int' n)
     pragma unset at
     pragma unset atx
     
-    // evaluation grid: step 1
-    rd_get_at(at, atx, n)
-    
     // prepare data
     rd_getdata(data)
     rd_adjust(data)
-    rd_relrank(data)
     
-    // evaluation grid: step 2
-    if (length(at)) atx = mm_quantile(*data.Y0, *data.W0, at)
-    else            at  = mm_relrank(*data.Y0, *data.W0, atx, 1)
+    // evaluation grid
+    rd_get_at(data, at, atx, n)
     
     // estimation
-    b  = mm_relrank(data.ranks, *data.W1, at)
+    b = mm_relrank(*data.Y1, *data.W1, atx)
+    // if (data.method) { // add (0,0) coordinate
+    //     atx = atx[1] \ atx
+    //     at  = 0 \ at
+    //     b   = 0 \ b
+    //     n   = rows(b)
+    //     st_local("n", strofreal(n, "%18.0g"))
+    // }
+    if (data.method==0) {
+        // interpolate b between steps so that straight line can be used in
+        // graph (equivalent to the expectation of the curve if ties are 
+        // broken randomly)
+        _rd_CDF_ipolate(b, at, atx)
+    }
     
     // return results
-    cstripe = (J(n,1,""), "p":+strofreal(1::n))
+    if (data.method==2) cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
+        //cstripe = (J(n,1,""), ("_origin" \ strofreal(atx[|2\n|]):+("."+st_local("depvar"))))
+    else if (data.method) cstripe = (J(n,1,""), "x":+strofreal(1::n))
+        //cstripe = (J(n,1,""), ("_origin" \ ("x":+strofreal(1::n-1))))
+    else cstripe = (J(n,1,""), "p":+strofreal(1::n))
     st_matrix(st_local("b"), b')
     st_matrixcolstripe(st_local("b"), cstripe)
-    st_matrix(st_local("AT"), at')
+    st_matrix(st_local("AT"), (at, atx)')
     st_matrixcolstripe(st_local("AT"), cstripe)
-    st_matrix(st_local("ATX"), atx')
-    st_matrixcolstripe(st_local("ATX"), cstripe)
+    st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     
-    // outcome grid
+    // - outcome grid
     n = strtoreal(st_local("ogrid"))
     if (n<.) {
         cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(n, data)
+        b = rd_ogrid(0, n, data), rd_ogrid(1, n, data)
         st_matrix(st_local("OGRID"), b')
         st_matrixcolstripe(st_local("OGRID"), cstripe)
+    }
+}
+
+void _rd_CDF_ipolate(`RC' b, `RC' at, `RC' atx)
+{
+    `Int' i, i0, j, n
+    `RS'  b0
+    
+    n = rows(b)
+    i0 = n; b0 = b[i0]
+    for (i=n-1;i;i--) {
+        if (b[i]<b0) {
+            // step encountered; interpolate intermediate values
+            for (j=i0-1; j>i; j--) {
+                b[j] = b0 - (b0-b[i]) * (at[i0]-at[j]) / (at[i0]-at[i])
+            }
+            i0 = i; b0 = b[i0]
+        }
+        else if (atx[i]<atx[i0]) {
+            // flat region; do not interpolate
+            i0 = i; b0 = b[i0]
+        }
+    }
+    // handle first segment
+    for (j=i0-1; j; j--) {
+        b[j] = b0 - b0 * (at[i0]-at[j]) / at[i0]
     }
 }
 

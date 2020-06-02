@@ -35,6 +35,25 @@ Installation from GitHub:
 
 Main changes:
 
+    02jun2020 (version 1.1.2):
+    - -reldist pdf- and -reldist cdf- now have option -discrete- to treat data as 
+      discrete; evaluation is performed at existing outcome values; pdf is displayed
+      as a step function
+    - -reldist pdf- and -reldist cdf- now have option -atx- without 
+      argument to evaluate at existing outcome values
+    - new -nomid- option to avoid using midpoints for relative ranks
+    - relative CDF is no longer computed as a step function; values are 
+      interpolated between jumps; this is consistent with breaking ties
+      randomly; option -nomid- has no effect on CDF (i.e. CDF is always computed
+      as if nomid has been specified)
+    - no longer using midpoints when computing values of at() from atx()
+    - now using inverse empirical CDF for computing atx() from at() and for 
+      computing e(ogrid) (i.e. no averaging where distribution function is flat)
+    - no longer using interpolation when computing the olabel() positions; the
+      positions are now consistent with how a CDF is computed
+    - no longer using rangen() for creating evaluation grids (precision issue)
+    - now only returns e(at) with two rows instead of e(at) and e(atx)
+    
     06may2020 (version 1.1.1):
     - option balance() added
     - option pooled added
