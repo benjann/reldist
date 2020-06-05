@@ -1,4 +1,4 @@
-*! version 1.1.3  05jun2020  Ben Jann
+*! version 1.1.4  05jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -1949,40 +1949,40 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
     return(invtokens((strofreal(p) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')))
 }
 
-/* Setup for estimation -----------------------------------------------------*/
+/* Data preparation and some common functions -------------------------------*/
 
 struct `ADJ' {
-    `Bool'  adj       // has adjustment
-    `Bool'  location  // adjust location
-    `Bool'  scale     // adjust scale
-    `Bool'  shape     // adjust shape
+    `Bool'  adj        // has adjustment
+    `Bool'  location   // adjust location
+    `Bool'  scale      // adjust scale
+    `Bool'  shape      // adjust shape
 }
 
 struct `DATA' {
-    `Bool'  by        // syntax 1
-    `Bool'  method    // 0 continuous: at
-                      // 1 continuous: full atx
-                      // 2 continuous: custom atx,
-                      // 3 discrete: at
-                      // 4 discrete: full atx
-                      // 5 discrete: custom atx
-    `Bool'  tbreak    // break ties
-    `Bool'  mid       // use midpoints for relative ranks: 1 yes, 0 no 
-    `Bool'  pooled    // use pooled reference distribution
-    `Int'   balanced  // balancing: 0 none, 1 comparison, 2 reference
-    `RC'    y1, w1    // data and weights comparison distribution
-    `RS'    N1        // N of comparison distribution
-    `RC'    y0, w0    // data and weights reference distribution
-    `RS'    N0        // N of reference distribution
-    `Int'   wtype     // weights: 0 none, 1 fw, 2 pw, 3 aw, 4 iw
-    `Adj'   adj1      // comparison distribution adjustments
-    `Adj'   adj0      // reference distribution adjustments
-    `Bool'  adjmean   // 0 use median, 1 use mean
-    `Bool'  adjsd     // 0 use IQR, 1 use sd
-    `Int'   adjlink   // 0 linear/additive, 1 logarithmic, 2 multiplicative
-    `PSRC'  Y1, W1    // (adjusted) comparison distribution
-    `PSRC'  Y0, W0    // (adjusted) reference distribution
-    `RC'    ranks     // relative ranks
+    `Bool'  by         // syntax 1
+    `Bool'  method     // 0 continuous: at
+                       // 1 continuous: full atx
+                       // 2 continuous: custom atx,
+                       // 3 discrete: at
+                       // 4 discrete: full atx
+                       // 5 discrete: custom atx
+    `Bool'  tbreak     // break ties
+    `Bool'  mid        // use midpoints for relative ranks: 1 yes, 0 no 
+    `Bool'  pooled     // use pooled reference distribution
+    `Int'   balanced   // balancing: 0 none, 1 comparison, 2 reference
+    `RC'    y1, w1, p1 // data and weights comparison distribution
+    `RS'    N1         // N of comparison distribution
+    `RC'    y0, w0, p0 // data and weights reference distribution
+    `RS'    N0         // N of reference distribution
+    `Int'   wtype      // weights: 0 none, 1 fw, 2 pw, 3 aw, 4 iw
+    `Adj'   adj1       // comparison distribution adjustments
+    `Adj'   adj0       // reference distribution adjustments
+    `Bool'  adjmean    // 0 use median, 1 use mean
+    `Bool'  adjsd      // 0 use IQR, 1 use sd
+    `Int'   adjlink    // 0 linear/additive, 1 logarithmic, 2 multiplicative
+    `PSRC'  Y1, W1, P1 // (adjusted) comparison distribution
+    `PSRC'  Y0, W0, P0 // (adjusted) reference distribution
+    `RC'    ranks      // relative ranks
 }
 
 void rd_getadj(`Adj' adj, `SS' lnm)
@@ -2064,6 +2064,26 @@ void rd_getdata(`Data' data)
         data.N0 = rows(data.y0)
     }
     
+    // sort data
+    if (rows(data.w1)!=1) {
+        data.p1 = order((data.y1,data.w1), (1,2))
+        data.y1 = data.y1[data.p1]
+        data.w1 = data.w1[data.p1]
+    }
+    else {
+        data.p1 = order(data.y1, 1)
+        data.y1 = data.y1[data.p1]
+    }
+    if (rows(data.w0)!=1) {
+        data.p0 = order((data.y0,data.w0), (1,2))
+        data.y0 = data.y0[data.p0]
+        data.w0 = data.w0[data.p0]
+    }
+    else {
+        data.p0 = order(data.y0, 1)
+        data.y0 = data.y0[data.p0]
+    }
+    
     // adjustment settings
     rd_getadj(data.adj1, "adj1")
     rd_getadj(data.adj0, "adj0")
@@ -2074,18 +2094,17 @@ void rd_getdata(`Data' data)
 
 void rd_adjust(`Data' data)
 {
-    _rd_adjust(data.Y1, data.W1, data.y1, data.w1, data.y0, data.w0, data.adj1,
-        data.adjmean, data.adjsd, data.adjlink)
-    _rd_adjust(data.Y0, data.W0, data.y0, data.w0, data.y1, data.w1, data.adj0,
-        data.adjmean, data.adjsd, data.adjlink)
+    _rd_adjust(data.Y1, data.W1, data.P1, data.y1, data.w1, data.p1, 
+        data.y0, data.w0, data.p0, data.adj1, data.adjmean, data.adjsd, data.adjlink)
+    _rd_adjust(data.Y0, data.W0, data.P0, data.y0, data.w0, data.p0,
+        data.y1, data.w1, data.p1, data.adj0, data.adjmean, data.adjsd, data.adjlink)
 }
 
-void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
-    `Bool' mean, `Bool' sd, `Int' link)
+void _rd_adjust(`PSRC' Y, `PSRC' W, `PSRC' P, `RC' y, `RC' w, `RC' p, 
+    `RC' y0, `RC' w0, `RC' p0, `Adj' adj, `Bool' mean, `Bool' sd, `Int' link)
 {
     if (adj.adj==0) {
-        Y = &y
-        W = &w
+        Y = &y; W = &w; P = &p
         return
     }
     if (adj.shape) {
@@ -2093,13 +2112,13 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
         else if (adj.location) Y = _rd_adjust_s(y0, w0, y, w, mean, sd, link)
         else if (adj.scale) Y = _rd_adjust_l(y0, w0, y, w, mean, link)
         else Y = _rd_adjust_ls(y0, w0, y, w, mean, sd, link)
-        W = &w0
+        W = &w0; P = &p0
         return
     }
     if (adj.location & adj.scale) Y = _rd_adjust_ls(y, w, y0, w0, mean, sd, link)
     else if (adj.location) Y = _rd_adjust_l(y, w, y0, w0, mean, link)
     else if (adj.scale) Y = _rd_adjust_s(y, w, y0, w0, mean, sd, link)
-    W = &w
+    W = &w; P = &p
 }
 
 `PSRC' _rd_adjust_ls(`RC' y, `RC' w, `RC' y0, `RC' w0, `Bool' mean, `Bool' sd,
@@ -2110,17 +2129,17 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
     
     if (link==1) {                       // logarithmic
         lny = ln(y)
-        l  = (mean ? mean(lny, w)     : mm_median(lny, w))
-        l0 = (mean ? mean(ln(y0), w0) : mm_median(ln(y0), w0))
-        s  = (sd ? sqrt(variance(lny, w))     : mm_iqrange(lny, w))
-        s0 = (sd ? sqrt(variance(ln(y0), w0)) : mm_iqrange(ln(y0), w0))
+        l  = (mean ? mean(lny, w)     : _rd_median(lny, w))
+        l0 = (mean ? mean(ln(y0), w0) : _rd_median(ln(y0), w0))
+        s  = (sd ? sqrt(variance(lny, w))     : _rd_iqrange(lny, w))
+        s0 = (sd ? sqrt(variance(ln(y0), w0)) : _rd_iqrange(ln(y0), w0))
         return(&(exp((lny :- l) * (s0 / s) :+ l0)))
     }
-    l  = (mean ? mean(y, w)   : mm_median(y, w))
-    l0 = (mean ? mean(y0, w0) : mm_median(y0, w0))
+    l  = (mean ? mean(y, w)   : _rd_median(y, w))
+    l0 = (mean ? mean(y0, w0) : _rd_median(y0, w0))
     if (link==2) return(&(y * (l0 / l))) // multiplicative (scale not relevant)
-    s  = (sd ? sqrt(variance(y, w))   : mm_iqrange(y, w))
-    s0 = (sd ? sqrt(variance(y0, w0)) : mm_iqrange(y0, w0))
+    s  = (sd ? sqrt(variance(y, w))   : _rd_iqrange(y, w))
+    s0 = (sd ? sqrt(variance(y0, w0)) : _rd_iqrange(y0, w0))
     return(&((y :- l) * (s0 / s) :+ l0)) // additive
 }
 
@@ -2131,12 +2150,12 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
     
     if (link==1) {                       // logarithmic
         lny = ln(y)
-        l  = (mean ? mean(lny, w)     : mm_median(lny, w))
-        l0 = (mean ? mean(ln(y0), w0) : mm_median(ln(y0), w0))
+        l  = (mean ? mean(lny, w)     : _rd_median(lny, w))
+        l0 = (mean ? mean(ln(y0), w0) : _rd_median(ln(y0), w0))
         return(&(exp(lny :+ (l0 - l))))
     }
-    l  = (mean ? mean(y, w)   : mm_median(y, w))
-    l0 = (mean ? mean(y0, w0) : mm_median(y0, w0))
+    l  = (mean ? mean(y, w)   : _rd_median(y, w))
+    l0 = (mean ? mean(y0, w0) : _rd_median(y0, w0))
     if (link==2) return(&(y * (l0 / l))) // multiplicative
     return(&(y :+ (l0 - l)))             // additive
 }
@@ -2149,15 +2168,15 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
     
     if (link==1) {                       // logarithmic
         lny = ln(y)
-        l  = (mean ? mean(lny, w) : mm_median(lny, w))
-        s  = (sd ? sqrt(variance(lny, w))     : mm_iqrange(lny, w))
-        s0 = (sd ? sqrt(variance(ln(y0), w0)) : mm_iqrange(ln(y0), w0))
+        l  = (mean ? mean(lny, w) : _rd_median(lny, w))
+        s  = (sd ? sqrt(variance(lny, w))     : _rd_iqrange(lny, w))
+        s0 = (sd ? sqrt(variance(ln(y0), w0)) : _rd_iqrange(ln(y0), w0))
         return(&(exp((lny :- l) * (s0 / s) :+ l)))
     }
     if (link==2) return(&y)              // multiplicative (scale not relevant)
-    l  = (mean ? mean(y, w) : mm_median(y, w))
-    s  = (sd ? sqrt(variance(y, w))   : mm_iqrange(y, w))
-    s0 = (sd ? sqrt(variance(y0, w0)) : mm_iqrange(y0, w0))
+    l  = (mean ? mean(y, w) : _rd_median(y, w))
+    s  = (sd ? sqrt(variance(y, w))   : _rd_iqrange(y, w))
+    s0 = (sd ? sqrt(variance(y0, w0)) : _rd_iqrange(y0, w0))
     return(&((y :- l) * (s0 / s) :+ l)) // additive
 }
 
@@ -2165,20 +2184,20 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
 {
     // grid based on outcome values
     if (mod(data.method,3)==1) {
-        atx = uniqrows(*data.Y1 \ *data.Y0)
-        at = mm_relrank(*data.Y0, *data.W0, atx)
+        atx = _rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1))
+        at = _rd_relrank(*data.Y0, *data.W0, atx, ., 0, 0)
     }
     else if (mod(data.method,3)==2) {
         if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
         else                      atx = strtoreal(tokens(st_local("atx2")))'
-        at = mm_relrank(*data.Y0, *data.W0, atx)
+        at = _rd_relrank(*data.Y0, *data.W0, atx, ., 0, 0)
     }
     // grid based on probabilities
     else {
         if (st_local("at")!="")       at = strtoreal(tokens(st_local("at")))'
         else if (st_local("AT0")!="") at = _rd_get_at_mat("AT0")
         else                          at = (0::n-1) / (n-1)
-        atx = rd_invcdf(*data.Y0, *data.W0, at)
+        atx = _rd_quantile(*data.Y0, *data.W0, at, 1)
         if (at[1]==0) {
             if (min(*data.Y1)<atx[1]) {
                 // set origin to infimum (i.e. the largest observed value below
@@ -2201,282 +2220,13 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
     at = st_matrix(st_local(nm))'
     if (cols(at)>rows(at)) at = at'
     if (cols(at)>1) at = at[,1]
-    return(sort(uniqrows(at),1))
+    return(_rd_uniq(sort(at,1)))
 }
 
 void rd_relrank(`Data' data)
 {
-    `RC' y, cdf
-    pragma unset y
-    
-    // get cdf of Y0 at unique and sorted values; y will be filled in
-    cdf = _rd_relrank_cdf(*data.Y0, *data.W0, y)
-
-    // get relative ranks
-    if (!data.tbreak) {
-        // - case 1: tbreak = 0, mid = 0
-        if (!data.mid) data.ranks = _rd_relrank_1(*data.Y1, y, cdf)
-        // - case 2: tbreak = 0, mid = 1
-        else           data.ranks = _rd_relrank_2(*data.Y1, y, cdf)
-    }
-    else if (rows(*data.W1)==1) {
-        // - case 3: tbreak==1, mid = 0, no weights
-        if (!data.mid) data.ranks = _rd_relrank_3(*data.Y1, y, cdf)
-        // - case 4: tbreak==1, mid = 1, no weights
-        else           data.ranks = _rd_relrank_4(*data.Y1, y, cdf)
-    }
-    else {
-        // - case 5: tbreak==1, mid = 0, weighted
-        if (!data.mid) data.ranks = _rd_relrank_5(*data.Y1, *data.W1, y, cdf)
-        // - case 6: tbreak==1, mid = 1, weighted
-        else           data.ranks = _rd_relrank_6(*data.Y1, *data.W1, y, cdf)
-    }
-}
-
-`RC' _rd_relrank_cdf(`RC' X, `RC' w, `RC' x)
-{   // replaces x with uniq and sorted values of X and returns corresponding CDF
-    `Int'  i, n, j
-    `IntC' p
-    `RS'   xi
-    `RC'   cdf
-
-    // sort
-    n = rows(X)
-    p = order((X,(1::n)), (1,2)) //stable sort order
-    x = X[p]
-    
-    // compute ranks
-    if (rows(w)==1) cdf = 1::n
-    else            cdf = quadrunningsum(w[p])
-    
-    // remove ties (get last obs in each group)
-    p = J(n, 1, 0)
-    i = j = n
-    p[j] = i
-    xi = x[i]
-    i--
-    for (; i; i--) {
-        if (x[i]!=xi) {
-            j--
-            p[j] = i
-            xi = x[i]
-        }
-    }
-    p   = p[|j \ n|]
-    x   = x[p]
-    cdf = cdf[p]
-    
-    // return normalized ranks
-    return(cdf / cdf[rows(cdf)])
-}
-
-`RC' _rd_relrank_1(`RC' x, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j
-    `IntC' p
-    `RS'   xi
-    `RC'   r
-    
-    p = order(x, 1) // ties will have random order
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) r[ii] = cdf[j]
-        else break // x[i] is smaller than min(y)
-    }
-    return(r)
-}
-
-`RC' _rd_relrank_2(`RC' x, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j
-    `IntC' p
-    `RS'   xi
-    `RC'   r, step
-    
-    p = order(x, 1) // ties will have random order
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) {
-            if (y[j]==xi) r[ii] = cdf[j] - step[j]/2
-            else          r[ii] = cdf[j]
-        }
-        else break // x[ii] is smaller than min(y)
-    }
-    return(r)
-}
-
-`RC' _rd_relrank_3(`RC' x, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j, k
-    `IntC' p
-    `RS'   xi
-    `RC'   r, step
-    
-    p = order(x, 1) // ties will have random order
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) {
-            r[ii] = cdf[j]
-            if (y[j]==xi) {
-                for (k=i-1; k; k--) { // find ties in x
-                    if (x[p[k]]<xi) break
-                }
-                if ((++k)==i) continue // no ties
-                r[p[|k\i-1|]] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
-                i = k
-            }
-        }
-        else break // x[i] is smaller than min(y)
-    }
-    return(r)
-}
-
-`RC' _rd_relrank_4(`RC' x, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j, k
-    `IntC' p
-    `RS'   xi
-    `RC'   r, step
-    
-    p = order(x, 1) // ties will have random order
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) {
-            if (y[j]==xi) {
-                for (k=i-1; k; k--) { // find ties in x
-                    if (x[p[k]]<xi) break
-                }
-                if ((++k)==i) {
-                    r[ii] = cdf[j] - step[j] * 0.5
-                    continue
-                }
-                r[p[|k\i|]] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
-                i = k
-            }
-            else r[ii] = cdf[j]
-        }
-        else break // x[i] is smaller than min(y)
-    }
-    return(r)
-}
-
-`RC' _rd_relrank_5(`RC' x, `RC' w, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j, k
-    `IntC' p
-    `RS'   xi, W
-    `RC'   r, step, ww
-    
-    p = order((x,w), (1,2)) // break ties in ascending order of w
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) {
-            r[ii] = cdf[j]
-            if (y[j]==xi) {
-                for (k=i-1; k; k--) { // find ties in x
-                    if (x[p[k]]<xi) break
-                }
-                if ((++k)==i) continue // no ties
-                ww = runningsum(w[p[|k\i|]])
-                W  = ww[rows(ww)]
-                if (W==0) {
-                    r[p[|k\i-1|]] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
-                }
-                else {
-                    ww = ww[|1\rows(ww)-1|]
-                    r[p[|k\i-1|]] = cdf[j] :- step[j] :* (W:-ww) / W
-                }
-                i = k
-            }
-        }
-        else break // x[i] is smaller than min(y)
-    }
-    return(r)
-}
-
-`RC' _rd_relrank_6(`RC' x, `RC' w, `RC' y, `RC' cdf)
-{
-    `Int'  i, ii, j, k
-    `IntC' p
-    `RS'   xi, W
-    `RC'   r, step, ww, wstep
-    
-    p = order((x,w), (1,2)) // break ties in ascending order of w
-    i = rows(x)
-    r = J(i, 1, 0)
-    j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
-    for (; i; i--) {
-        ii = p[i]
-        xi = x[ii]
-        for (; j; j--) {
-            if (y[j]<=xi) break
-        }
-        if (j) {
-            if (y[j]==xi) {
-                for (k=i-1; k; k--) { // find ties in x
-                    if (x[p[k]]<xi) break
-                }
-                if ((++k)==i) {
-                    r[ii] = cdf[j] - step[j] * 0.5
-                    continue // no ties
-                }
-                ww = runningsum(w[p[|k\i|]])
-                W  = ww[rows(ww)]
-                if (W==0) {
-                    r[p[|k\i|]] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
-                }
-                else {
-                    wstep = ww - (0 \ ww[|1\rows(ww)-1|])
-                    ww = ww - 0.5 * wstep
-                    r[p[|k\i|]] = cdf[j] :- step[j] :* (W:-ww) / W
-                }
-                i = k
-            }
-            else r[ii] = cdf[j]
-        }
-        else break // x[i] is smaller than min(y)
-    }
-    return(r)
+    data.ranks = 
+        _rd_relrank(*data.Y0, *data.W0, *data.Y1, *data.W1, data.tbreak, data.mid)
 }
 
 void rd_ogrid(`Data' data, `Bool' cdf)
@@ -2497,48 +2247,10 @@ void rd_ogrid(`Data' data, `Bool' cdf)
 
 `RC' _rd_ogrid(`Int' n, `Data' data, `Bool' grp)
 {
-    if (grp) return(rd_invcdf(*data.Y1, *data.W1, (0::n-1)/(n-1)))
-             return(rd_invcdf(*data.Y0, *data.W0, (0::n-1)/(n-1)))
+    if (grp) return(_rd_quantile(*data.Y1, *data.W1, (0::n-1)/(n-1), 1))
+             return(_rd_quantile(*data.Y0, *data.W0, (0::n-1)/(n-1), 1))
 }
 
-`RC' rd_invcdf(`RC' X, `RC' w, `RC' P)
-{   // quantile function that is inverse of empirical distribution function
-    // (definition 1 in Hyndman&Fan 1996)
-    // P assumed in [0,1]
-    `Int'  n
-    `IntC' j
-    
-    if (rows(w)!=1) return(_rd_invcdf_w(X, w, P))
-    n = rows(X)
-    if (n==0) return(J(rows(P),1,.))
-    j = ceil(P * n)
-    _editvalue(j, 0, 1) // use minimum if P = 0
-    return(sort(X,1)[j])
-}
-
-`RC' _rd_invcdf_w(`RC' X, `RC' w, `RC' P0)
-{   // P0 assumed sorted
-    `Int'  n, r, i, j
-    `IntC' p
-    `RC'   W, P, Q
-    
-    n = rows(X)
-    if (n==0) return(J(rows(P0),1,.))
-    W = quadsum(w)
-    P = P0 * W
-    p = order(X, 1)
-    W = quadrunningsum(w[p])
-    r = rows(P)
-    Q = J(r,1,.)
-    j = n
-    for (i=r; i; i--) {
-        for (;j>1; j--) {
-            if (W[j-1]<P[i]) break
-        }
-        Q[i] = X[p[j]]
-    }
-    return(Q)
-}
 
 /* PDF estimation -----------------------------------------------------------*/
 
@@ -2599,8 +2311,8 @@ void rd_PDF_discrete(`Data' data, `Int' n, `RC' at, `RC' atx)
     `RC'   b, rd, cdf, x
     
     // compute relative density at observed values
-    x   = uniqrows(*data.Y1 \ *data.Y0)
-    cdf = mm_relrank(*data.Y0, *data.W0, x)
+    x   = _rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1))
+    cdf = _rd_relrank(*data.Y0, *data.W0, x, ., 0, 0)
     rd  = _rd_PDF_discrete_b(*data.Y1, *data.W1, x, cdf)
     r   = rows(rd)
     
@@ -2639,7 +2351,7 @@ void rd_PDF_discrete(`Data' data, `Int' n, `RC' at, `RC' atx)
     `Int' n
     `RC'  b, p
     
-    b = mm_relrank(Y, w, atx)
+    b = _rd_relrank(Y, w, atx, ., 0, 0)
     n = rows(b)
     b = b  - (0 \  b[|1\n-1|])
     p = at - (0 \ at[|1\n-1|])
@@ -2963,7 +2675,7 @@ void rd_HIST(`Int' n)
     b = mm_exactbin(data.ranks, *data.W1, at, 1)
     b = b * (n / mm_nobs(data.ranks, *data.W1))
     at = at[|1 \ n |] :+ .5/n
-    atx = rd_invcdf(*data.Y0, *data.W0, at)
+    atx = _rd_quantile(*data.Y0, *data.W0, at, 1)
     return(b)
 }
 
@@ -2985,7 +2697,7 @@ void rd_CDF(`Int' n)
     rd_get_at(data, at, atx, n)
     
     // estimate
-    if (mod(data.method,3)) b = mm_relrank(*data.Y1, *data.W1, atx)
+    if (mod(data.method,3)) b = _rd_relrank(*data.Y1, *data.W1, atx, ., 0, 0)
     else                    b = _rd_CDF_ipolate(data, at)
     
     // return results
@@ -3022,9 +2734,9 @@ void rd_CDF(`Int' n)
     `RC'  x, cdf0, cdf1, b
     
     // obtain exact cdf
-    x    = uniqrows(*data.Y1 \ *data.Y0)
-    cdf1 = 0 \ mm_relrank(*data.Y1, *data.W1, x)
-    cdf0 = 0 \ mm_relrank(*data.Y0, *data.W0, x)
+    x    = _rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1))
+    cdf1 = 0 \ _rd_relrank(*data.Y1, *data.W1, x, ., 0, 0)
+    cdf0 = 0 \ _rd_relrank(*data.Y0, *data.W0, x, ., 0, 0)
     
     // move to point where cdf0 first reaches 1
     for (j = rows(cdf0); j; j--) {
@@ -3093,8 +2805,371 @@ void rd_SUM()
         else touse = st_varindex(st_local("touse1"))
     }
     else touse = st_varindex(st_local("touse"))
-    st_store(., st_local("ranks"), touse, data.ranks)
-    if (data.balanced) st_store(., st_local("WVAR"), touse, *data.W1)
+    st_store(., st_local("ranks"), touse, data.ranks[invorder(*data.P1)])
+    if (data.balanced) st_store(., st_local("WVAR"), touse, *data.W1[invorder(*data.P1)])
+}
+
+/* Helper functions ---------------------------------------------------------*/
+
+// return unique values of X
+// - X assumed sorted and nonmissing
+`RC' _rd_uniq(`RC' X)  
+{
+    return(select(X, X:!=(X[|2\.|]\.)))
+}
+
+// quantile function:
+// d=1: inverse of empirical CDF (definition 1 in Hyndman&Fan 1996)
+// d=2: take averages where CDF is flat (definition 2 in Hyndman&Fan 1996)
+// - X assumed sorted and nonmissing
+// - P assumed sorted and in [0,1]
+`RS' _rd_median(`RC' X, `RC' w) return(_rd_quantile(X, w, .5, 2))
+`RS' _rd_iqrange(`RC' X, `RC' w)
+{
+    `RC' q
+
+    q = _rd_quantile(X, w, (.25 \ .75), 2)
+    return(q[2]-q[1])
+}
+`RC' _rd_quantile(`RC' X, `RC' w, `RC' P, `Int' d)
+{
+    if (d==2) {
+        if (rows(w)!=1) return(_rd_quantile2_w(X, w, P))
+        return(_rd_quantile2(X, P))
+    }
+    if (rows(w)!=1) return(_rd_quantile1_w(X, w, P))
+    return(_rd_quantile1(X, P))
+}
+
+`RC' _rd_quantile1(`RC' X, `RC' P)
+{
+    `Int'  n
+    `IntC' j
+    
+    n = rows(X)
+    if (n==0) return(J(rows(P),1,.))
+    j = ceil(P * n)
+    _editvalue(j, 0, 1) // use minimum if P = 0
+    return(X[j])
+}
+
+`RC' _rd_quantile2(`RC' X, `RC' P)
+{
+    `Int'  n
+    `IntC' g, j, j1
+    
+    n = rows(X)
+    if (n==0) return(J(rows(P),1,.))
+    g = P * n
+    j = floor(g)
+    g = 0.5 :+ 0.5*((g - j):>0)
+    j1 = j :+ 1
+    _editvalue(j, 0, 1)
+    _editvalue(j1, n+1, n)
+    return((1:-g):*X[j] + g:*X[j1])
+}
+
+`RC' _rd_quantile1_w(`RC' X, `RC' w, `RC' P0)
+{
+    `Int'  n, r, i, j
+    `RC'   W, P, Q
+    `RS'   pi
+    
+    n = rows(X)
+    if (n==0) return(J(rows(P0),1,.))
+    W = quadrunningsum(w)
+    P = P0 * W[n]
+    r = rows(P)
+    Q = J(r,1,.)
+    j = n
+    for (i=r; i; i--) {
+        pi = P[i]
+        for (;j>1; j--) {
+            if (W[j-1]<pi) break
+        }
+        Q[i] = X[j]
+    }
+    return(Q)
+}
+
+`RC' _rd_quantile2_w(`RC' X, `RC' w, `RC' P0)
+{
+    `Int'  n, r, i, j, k
+    `RC'   W, P, Q
+    `RS'   pi
+    
+    n = rows(X)
+    if (n==0) return(J(rows(P0),1,.))
+    W = quadrunningsum(w)
+    P = P0 * W[n]
+    r = rows(P)
+    Q = J(r,1,.)
+    j = n
+    for (i=r; i; i--) {
+        pi = P[i]
+        for (;j>1; j--) {
+            if (W[j-1]<pi) break
+        }
+        if (W[j]==pi) {
+            k = j
+            while (1) {
+                if (k==n) break
+                if (W[k]>pi) break
+                k++
+            }
+            Q[i] = (X[j] + X[k])/2
+        }
+        else Q[i] = X[j]
+    }
+    return(Q)
+}
+
+// compute relative ranks of X in distribution of Y
+// - Y and X assumed sorted and nonmissing
+`RC' _rd_relrank(`RC' Y, `RC' wY, `RC' X, `RC' wX, `Bool' tbreak, `Bool' mid)
+{
+    `RC' y, cdf
+    pragma unset y
+    
+    // get cdf of Y0 at unique values; y will be filled in
+    cdf = _rd_relrank_cdf(Y, wY, y)
+
+    // get relative ranks
+    if (!tbreak) {
+        if (!mid) return(_rd_relrank_1(X, y, cdf))
+                  return(_rd_relrank_2(X, y, cdf))
+    }
+    if (rows(wX)==1) {
+        if (!mid) return(_rd_relrank_3(X, y, cdf))
+                  return(_rd_relrank_4(X, y, cdf))
+    }
+    if (!mid)     return(_rd_relrank_5(X, wX, y, cdf))
+                  return(_rd_relrank_6(X, wX, y, cdf))
+}
+// - compute CDF of X and replace x with uniq values of X
+`RC' _rd_relrank_cdf(`RC' X, `RC' w, `RC' x)
+{   
+    `Int'  i, n, j
+    `IntC' p
+    `RS'   xi
+    `RC'   cdf
+
+    // compute ranks
+    n = rows(X)
+    if (rows(w)==1) cdf = 1::n
+    else            cdf = quadrunningsum(w)
+    
+    // remove ties (get last obs in each group)
+    x = X
+    p = J(n, 1, 0)
+    i = j = n
+    p[j] = i
+    xi = x[i]
+    i--
+    for (; i; i--) {
+        if (x[i]!=xi) {
+            j--
+            p[j] = i
+            xi = x[i]
+        }
+    }
+    p   = p[|j \ n|]
+    x   = x[p]
+    cdf = cdf[p]
+    
+    // return normalized ranks
+    return(cdf / cdf[rows(cdf)])
+}
+// - case 1: tbreak = 0, mid = 0
+`RC' _rd_relrank_1(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, j
+    `RS'   xi
+    `RC'   r
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) r[i] = cdf[j]
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+// - case 2: tbreak = 0, mid = 1
+`RC' _rd_relrank_2(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, j
+    `RS'   xi
+    `RC'   r, step
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) r[i] = cdf[j] - step[j]/2
+            else          r[i] = cdf[j]
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+// - case 3: tbreak==1, mid = 0, no weights
+`RC' _rd_relrank_3(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, j, k
+    `RS'   xi
+    `RC'   r, step
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            r[i] = cdf[j]
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[k]<xi) break
+                }
+                if ((++k)==i) continue // no ties
+                r[|k\i-1|] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
+                i = k
+            }
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+// - case 4: tbreak==1, mid = 1, no weights
+`RC' _rd_relrank_4(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, j, k
+    `RS'   xi
+    `RC'   r, step
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[k]<xi) break
+                }
+                if ((++k)==i) {
+                    r[i] = cdf[j] - step[j] * 0.5
+                    continue
+                }
+                r[|k\i|] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
+                i = k
+            }
+            else r[i] = cdf[j]
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+// - case 5: tbreak==1, mid = 0, weighted
+`RC' _rd_relrank_5(`RC' x, `RC' w, `RC' y, `RC' cdf)
+{
+    `Int'  i, j, k
+    `RS'   xi, W
+    `RC'   r, step, ww
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            r[i] = cdf[j]
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[k]<xi) break
+                }
+                if ((++k)==i) continue // no ties
+                ww = runningsum(w[|k\i|])
+                W  = ww[rows(ww)]
+                if (W==0) {
+                    r[|k\i-1|] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
+                }
+                else {
+                    ww = ww[|1\rows(ww)-1|]
+                    r[|k\i-1|] = cdf[j] :- step[j] :* (W:-ww) / W
+                }
+                i = k
+            }
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+// - case 6: tbreak==1, mid = 1, weighted
+`RC' _rd_relrank_6(`RC' x, `RC' w, `RC' y, `RC' cdf)
+{
+    `Int'  i, j, k
+    `RS'   xi, W
+    `RC'   r, step, ww, wstep
+    
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        xi = x[i]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[k]<xi) break
+                }
+                if ((++k)==i) {
+                    r[i] = cdf[j] - step[j] * 0.5
+                    continue // no ties
+                }
+                ww = runningsum(w[|k\i|])
+                W  = ww[rows(ww)]
+                if (W==0) {
+                    r[|k\i|] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
+                }
+                else {
+                    wstep = ww - (0 \ ww[|1\rows(ww)-1|])
+                    ww = ww - 0.5 * wstep
+                    r[|k\i|] = cdf[j] :- step[j] :* (W:-ww) / W
+                }
+                i = k
+            }
+            else r[i] = cdf[j]
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
 }
 
 end

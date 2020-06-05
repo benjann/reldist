@@ -35,6 +35,12 @@ Installation from GitHub:
 
 Main changes:
 
+    05jun2020 (version 1.1.4):
+    - made some speed improvements by avoiding repeated storting (data is now sorted
+      once when reading the data; subsequent computations then use functions that
+      assume sorted data; density estimation, however, still involves repeated
+      sorting; this could be further improved).
+
     05jun2020 (version 1.1.3):
     - new algorithm for computing relative ranks that breaks ties; use option 
       -nobreak- to employ old algorithm

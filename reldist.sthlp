@@ -940,7 +940,8 @@ help for {hi:reldist}
 {pstd}
     Or, to display only the histogram:
 
-        . {stata reldist histogram wage, by(union) graph}
+        . {stata reldist histogram wage, by(union) vce(bootstrap, reps(100))}
+        . {stata reldist graph}
 
 {pstd}
     Since unionized workers have, on average, higher wages than non-unionized workers,
