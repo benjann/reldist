@@ -1,4 +1,4 @@
-*! version 1.1.2  02jun2020  Ben Jann
+*! version 1.1.3  05jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -70,10 +70,12 @@ end
 
 program Check_vceprefix
     _parse comma lhs 0 : 0
-    syntax [, vce(str) Generate(passthru) atx ATX2(passthru) ///
-        GRaph GRaph2(passthru) DISCRete ///
+    syntax [, vce(str) Generate(passthru) ///
+        n(passthru) at(passthru) atx ATX2(passthru) DISCRete CATegorical ///
+        GRaph GRaph2(passthru) ///
         BWidth(str) BWADJust(passthru) NOSE * ]
-    local options `generate' `atx' `atxs2' `graph' `graph2' `discrete' `nose' `options'
+    local options `generate' `n' `at' `atx' `atx2' `discrete' `categorical' /*
+        */ `graph' `graph2' `nose' `options'
     if `"`vce'"'!="" {
         Parse_vceprefix `vce'
         if "`vcecmd'"!="" {
@@ -81,16 +83,22 @@ program Check_vceprefix
                 di as err "option {bf:generate()} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
-            if `"`atx'`atx2'"'!="" {
-                di as err "option {bf:atx()} not allowed with {bf:vce(`vcecmd')}"
-                exit 198
+            if "`discrete'"!="" {
+                if "`categorical'`n'`at'"=="" {
+                    di as err "option {bf:discrete} only allowed with "/*
+                        */"{bf:vce(`vcecmd')} if {bf:n()}, {bf:at()}, or "/*
+                        */"{bf:categorical} is specified"
+                    exit 198
+                }
+            }
+            else if `"`atx'`atx2'"'!="" {
+                if "`categorical'"=="" {
+                    di as err "option {bf:atx()} not allowed with {bf:vce(`vcecmd')}"
+                    exit 198
+                }
             }
             if `"`graph'`graph2'"'!="" {
                 di as err "option {bf:graph} not allowed with {bf:vce(`vcecmd')}"
-                exit 198
-            }
-            if "`discrete'"!="" {
-                di as err "option {bf:discrete} not allowed with {bf:vce(`vcecmd')}"
                 exit 198
             }
             if "`nose'"=="" {
@@ -129,7 +137,9 @@ end
 program Obtain_bwidth   // returns bwidth, bwadjust
     gettoken subcmd 0 : 0, parse(", ")
     if `"`subcmd'"'!="pdf" exit
-    syntax [anything] [if] [in] [fw iw aw pw] [, _vcevars(str) bwidth(str) * ]
+    syntax [anything] [if] [in] [fw iw aw pw] [, _vcevars(str) bwidth(str) ///
+        DISCRete CATegorical * ]
+    if "`discrete'`categorical'"!="" exit
     capt confirm number `bwidth'
     if _rc==0 exit
     di as txt "(running {bf:reldist} to obtain bandwith)"
@@ -455,7 +465,7 @@ program _GRAPH_olab // returns oaxis, twopts
         local otickopts `"`options'"'
     }
     if `"`olabel'`otick'"'=="" exit     // nothing to do
-    if (`"`e(atx)'"'=="" & `"`e(discrete)'"'=="") {
+    if `"`e(atx)'"'=="" {
         capt confirm matrix e(ogrid)
         if _rc==1 exit _rc
         if _rc {
@@ -513,7 +523,7 @@ end
 program GRAPH_pdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
-        noREFline REFOPTs(str) NOHISTogram HISTopts(str) ///
+        NOREFline REFline(str) NOHISTogram HISTopts(str) ///
         OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_pdf_histopts, `histopts'
@@ -529,10 +539,12 @@ program GRAPH_pdf
     mat `AT' = e(at)'
     mat `AT' = `AT'[1...,1]
     if `"`e(discrete)'"'!="" {
-        mat `B' = `B'[1,1] \ `B'
-        mat `AT' = 0 \ `AT'
-        local ++npdf
-        local offset offset
+        if `AT'[1,1]!=0 {
+            mat `B' = `B'[1,1] \ `B'
+            mat `AT' = 0 \ `AT'
+            local ++npdf
+            local offset offset
+        }
     }
     local nhist = e(n_hist)
     if `nhist'>=. {
@@ -562,8 +574,8 @@ program GRAPH_pdf
     else                     local connect
     local plots
     // - refline
-    if "`refline'"=="" {
-        local yline yline(1, `refopts')
+    if "`norefline'"=="" {
+        local yline yline(1, `refline')
     }
     // - histogram bars
     if "`nohistogram'"=="" {
@@ -609,7 +621,7 @@ end
 program GRAPH_histogram
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
-        noREFline REFOPTs(str) ///
+        NOREFline REFline(str) ///
         OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_get_gropts `options'
@@ -636,8 +648,8 @@ program GRAPH_histogram
     // compile graph
     local plots
     // - refline
-    if "`refline'"=="" {
-        local yline yline(1, `refopts')
+    if "`norefline'"=="" {
+        local yline yline(1, `refline')
     }
     // - histogram bars
     local hwidth = e(hwidth) 
@@ -664,7 +676,7 @@ end
 program GRAPH_cdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
-        noREFline REFOPTs(str) NOORIGin ///
+        NOREFline REFline(str) NOORIGin ///
         OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         YOLABel(passthru) YOTICk(passthru) YOTItle(passthru) ///
         addplot(str asis) * ]
@@ -683,7 +695,7 @@ program GRAPH_cdf
     mat `AT' = e(at)'
     mat `AT' = `AT'[1...,1]
     if "`noorigin'"=="" {
-        if `AT'[1,1]!=0 {
+        if `"`e(origin)'"'!="" {
             mat `B'  = 0 \ `B'
             mat `AT' = 0 \ `AT'
             local offset offset
@@ -709,10 +721,10 @@ program GRAPH_cdf
     // compile graph
     local plots
     // - refline
-    if "`refline'"=="" {
+    if "`norefline'"=="" {
         local plots `plots' /*
             */ (scatteri 0 0 1 1, `oaxis'/*
-            */ connect(l) ms(i) lstyle(xyline) `refopts')
+            */ connect(l) ms(i) lstyle(xyline) `refline')
     }
     // - CI
     if "`hasci'"!="" {
@@ -755,7 +767,7 @@ program OLABEL, rclass
     syntax [, OLABel(numlist sort) ]
     return local label_x `"`olabel'"'
     if `"`olabel'`otick'"'=="" exit // nothing to do
-    local atx = (`"`e(atx)'"'!="" | `"`e(discrete)'"'!="")
+    local atx = (`"`e(atx)'"'!="")
     if (`atx'==0) {
         capt confirm matrix e(ogrid)
         if _rc==1 exit _rc
@@ -869,23 +881,15 @@ program Parse_adjust // parse the adjust() option
     c_local adjmult `multiplicative'
 end
 
-program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and reldist cdf
-                   // returns n, ATX0, atx, AT0, at
-    args n at atx atx2 discrete
-    if "`discrete'"!="" {
-        if "`n'"!="" {
-            di as err "{bf:n()} and {bf:discrete} not both allowed"
-            exit 198
+program Parse_at   // parse n(), at(), atx, atx(), categorical, descrete
+                   // returns n, ATX0, atx, AT0, at, categorical, discrete
+    args n at atx atx2 discrete categorical
+    if `"`discrete'`categorical'"'!="" {
+        c_local discrete discrete // categorical implies discrete
+        if `"`n'`at'`atx2'"'=="" {
+            c_local atx atx // discrete/categorical implies atx by default
+            exit
         }
-        if `"`at'"'!="" {
-            di as err "{bf:at()} and {bf:discrete} not both allowed"
-            exit 198
-        }
-        if `"`atx'`atx2'"'!="" {
-            di as err "{bf:atx()} and {bf:discrete} not both allowed"
-            exit 198
-        }
-        exit
     }
     if `"`atx'`atx2'"'!="" {
         if "`n'"!="" {
@@ -900,7 +904,17 @@ program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and r
         c_local atx atx
         if `: list sizeof atx2'==1 {
             capt confirm matrix `atx2'
+            if _rc==1 exit _rc
             if _rc==0 {
+                if "`categorical'"!="" {
+                    capt mata: rd_check_mat("`atx2'", 1)
+                    if _rc==1 exit _rc
+                    if _rc {
+                        di as err "noninteger or negative values not allowed"/*
+                            */ " in {bf:atx()} is {bf:categorical} is specified"
+                        exit 125
+                    }
+                }
                 c_local ATX0 `atx2'
                 c_local atx2
                 exit
@@ -908,7 +922,16 @@ program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and r
         }
         local 0 `", atx(`atx2')"'
         syntax [, atx(numlist ascending) ]
-        c_local atx2 "`atx2'"
+        if "`categorical'"!="" {
+            capt numlist "`atx'", integer range(>=0)
+            if _rc==1 exit _rc
+            if _rc {
+                di as err "noninteger or negative values not allowed"/*
+                    */ " in {bf:atx()} is {bf:categorical} is specified"
+                exit 125
+            }
+        }
+        c_local atx2 "`atx'"
         exit
     }
     if `"`at'"'!="" {
@@ -918,7 +941,14 @@ program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and r
         }
         if `: list sizeof at'==1 {
             capt confirm matrix `at'
+            if _rc==1 exit _rc
             if _rc==0 {
+                capt mata: rd_check_mat("`at'", 0)
+                if _rc==1 exit _rc
+                if _rc {
+                    di as err "values provided in {bf:at()} must be in [0,1]"
+                    exit 125
+                }
                 c_local AT0 `at'
                 c_local at
                 exit
@@ -932,18 +962,35 @@ program Parse_at   // parse n(), at(), atx, atx(), descrete in reldist pdf and r
     if "`n'"=="" c_local n 101
 end
 
+program Parse_cat_notallowed
+    args discrete categorical adjust histogram
+    if "`categorical'"!="" {
+        if `"`adjust'"'!="" {
+            di as err "{bf:adjust()} and {bf:categorical} not both allowed"
+            exit 198
+        }
+        if `"`histogram'"'!="" {
+            di as err "{bf:histogram()} and {bf:categorical} not both allowed"
+            exit 198
+        }
+    }
+    if "`discrete'"!="" {
+        if `"`adjust'"'!="" {
+            di as err "{bf:adjust()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        if `"`histogram'"'!="" {
+            di as err "{bf:histogram()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+    }
+end
+
 program Parse_ogrid 
-    args noogrid ogrid atx discrete
+    args noogrid ogrid atx
     if "`atx'"!="" {
         if "`ogrid'"!="" {
             di as err "{bf:ogrid()} and {bf:atx()} not both allowed"
-            exit 198
-        }
-        exit
-    }
-    if "`discrete'"!="" {
-        if "`ogrid'"!="" {
-            di as err "{bf:ogrid()} and {bf:discrete} not both allowed"
             exit 198
         }
         exit
@@ -1225,20 +1272,20 @@ program Check_adjlog // logarithmic adjustment: assert that y > 0
     }
 end
 
-program Check_discrete // outcome variable(s) must be integer >=0
-    args touse depvar refvar discrete
-    if "`discrete'"=="" exit
+program Check_categorical // outcome variable(s) must be integer >=0
+    args touse depvar refvar categorical
+    if "`categorical'"=="" exit
     capt assert (`depvar'>=0 & trunc(`depvar')==`depvar') if `touse'
     if _rc {
         di as err "`depvar': noninteger or negative values not allowed"/*
-        */ " if {bf:discrete} is specified"
+        */ " if {bf:categorical} is specified"
         exit 452
     }
     if "`refvar'"=="" exit
     capt assert (`refvar'>=0 & trunc(`refvar')==`refvar') if `touse'
     if _rc {
         di as err "`refvar': noninteger or negative values not allowed"/*
-        */ " if {bf:discrete} is specified"
+        */ " if {bf:categorical} is specified"
         exit 452
     }
 end
@@ -1274,8 +1321,9 @@ end
 program PDF, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) at(str) atx ATX2(str) DISCRete NOMID ///
+    syntax [if] [in] [fw iw aw pw/], [ ///
+        NOBReak NOMID ADJust(str) BALance(str) ///
+        n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         BWidth(str) BWADJust(numlist >0 max=1) ///
         BOundary(str) Kernel(string) ///
@@ -1283,36 +1331,16 @@ program PDF, eclass
         altlbwf /// (undocumented)
         exact NApprox(numlist int >1 max=1) ///
         HISTogram HISTogram2(numlist int >0 max=1) ///
-        /*vce(str)*/ NOSE Level(cilevel) noHeader NOTABle TABle ///
+        NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
-    //if `"`vce'"'!="" {
-    //    if "`nose'"!="" {
-    //        di as err "{bf:vce()} and {bf:nose} not both allowed"
-    //        exit 198
-    //    }
-    //    if `"`vce'"'!=substr("analytic",1,max(1,strlen(`"`vce'"'))) {
-    //        di as err "{bf:vce()}: '" `"`vce'"' "' not allowed"
-    //        exit 198
-    //    }
-    //    local vce analytic
-    //}
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
-    if "`discrete'"!="" {
-        if `"`adjust'"'!="" {
-            di as err "{bf:adjust()} and {bf:discrete} not both allowed"
-            exit 198
-        }
-        if `"`histogram'`histogram2'"'!="" {
-            di as err "{bf:histogram()} and {bf:discrete} not both allowed"
-            exit 198
-        }
-        local nose nose // enforce nose
-    }
+    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'" "`categorical'"
+    if "`discrete'"!="" local nose nose // standard errors not supported
+    Parse_cat_notallowed "`discrete'" "`categorical'" `"`adjust'"' `"`histogram'`histogram2'"'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'"
-    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'" "`discrete'"
+    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'"
     if "`histogram2'"!=""     local nhist `histogram2'
     else if "`histogram'"!="" local nhist 10
     if "`napprox'"==""        local napprox = max(512, `n'+1)
@@ -1336,7 +1364,7 @@ program PDF, eclass
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
-    Check_discrete `touse' `depvar' "`refvar'" "`discrete'"
+    Check_categorical `touse' `depvar' "`refvar'" "`categorical'"
     
     // compute weights for balancing
     if `"`bal_varlist'"'!="" {
@@ -1355,12 +1383,13 @@ program PDF, eclass
     // returns
     eret post `b' [`weight'`exp'], obs(`N') esample(`touse')
     mata: rd_Post_common_e()
-    eret local  subcmd   "pdf"
-    eret local  title    "Relative density function"
-    eret matrix at       = `AT'
-    eret local atx       "`atx'"
-    eret local discrete  "`discrete'"
-    eret scalar n        = `n'
+    eret local  subcmd      "pdf"
+    eret local  title       "Relative density function"
+    eret matrix at          = `AT'
+    eret local atx          "`atx'"
+    eret local discrete     "`discrete'"
+    eret local categorical  "`categorical'"
+    eret scalar n           = `n'
     if "`ogrid'"!="" {
         eret matrix ogrid    = `OGRID'
     }
@@ -1435,8 +1464,9 @@ end
 program HIST, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) NOMID ///
+    syntax [if] [in] [fw iw aw pw/], [ ///
+        NOBReak NOMID ADJust(str) BALance(str) ///
+        n(numlist int >0 max=1) ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
@@ -1485,24 +1515,27 @@ end
 program CDF, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        n(numlist int >0 max=1) at(str) atx ATX2(str) DISCRete NOMID ///
+    syntax [if] [in] [fw iw aw pw/], [ ///
+        NOBReak NOMID ADJust(str) BALance(str) ///
+        n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
-    local nomid nomid // enforce nomid
+    local nobreak nobreak // enforce nobreak; only affects e()-returns
+    local nomid nomid     // enforce nomid; only affects e()-returns
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
-    if "`discrete'"!="" {
+    if "`categorical'"!="" {
         if `"`adjust'"'!="" {
-            di as err "{bf:adjust()} and {bf:discrete} not both allowed"
+            di as err "{bf:adjust()} and {bf:categorical} not both allowed"
             exit 198
         }
     }
+    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'" "`categorical'"
+    Parse_cat_notallowed "`discrete'" "`categorical'" `"`adjust'"'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'"
-    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'" "`discrete'"
+    Parse_ogrid "`noogrid'" "`ogrid'" "`atx'"
     
     // mark sample
     marksample touse
@@ -1510,7 +1543,7 @@ program CDF, eclass
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
-    Check_discrete `touse' `depvar' "`refvar'" "`discrete'"
+    Check_categorical `touse' `depvar' "`refvar'" "`categorical'"
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
     // compute weights for balancing
@@ -1530,11 +1563,13 @@ program CDF, eclass
     // returns
     eret post `b' [`weight'`exp'], obs(`N') esample(`touse')
     mata: rd_Post_common_e()
-    eret local subcmd   "cdf"
-    eret local title    "Cumulative relative distribution"
-    eret matrix at      = `AT'
-    eret local atx      "`atx'"
-    eret local discrete "`discrete'"
+    eret local subcmd      "cdf"
+    eret local title       "Cumulative relative distribution"
+    eret matrix at         = `AT'
+    eret local atx         "`atx'"
+    eret local discrete    "`discrete'"
+    eret local categorical "`categorical'"
+    eret local origin      "`origin'"
     if "`ogrid'"!="" {
         eret matrix ogrid  = `OGRID'
     }
@@ -1544,8 +1579,8 @@ end
 program MRP, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ BALance(str) ///
-        Over(varname numeric) NOMID ///
+    syntax [if] [in] [fw iw aw pw/], [ ///
+        NOBReak NOMID BALance(str) Over(varname numeric) ///
         SCale SCale2(str) MULTiplicative LOGarithmic ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
@@ -1616,7 +1651,7 @@ program MRP, eclass
             PrepareOverlevel `i' "`over'==`o'" "`by'" `touse' `touse1' ///
                 `touse0' `TOUSE' `TOUSE1' `TOUSE0' `_N' `_N1' `_N0' "`wgt'"
             mata: rd_MRP("`btmp'")
-            mata: rd_FlagOmitted("`btmp'") // stats can be missing if too few obs
+            mata: rd_FlagOmitted("`btmp'") // mrp can be missing if too few obs
             mat coleq `btmp' = "`o'"
             mat `b' = nullmat(`b'), `btmp'
         }
@@ -1633,8 +1668,8 @@ end
 program SUM, eclass
     // syntax
     Parse_syntax `0'
-    syntax [if] [in] [fw iw aw pw/], [ ADJust(str) BALance(str) ///
-        Over(varname numeric) NOMID ///
+    syntax [if] [in] [fw iw aw pw/], [ ///
+        NOBReak NOMID ADJust(str) BALance(str) Over(varname numeric) ///
         Statistics(passthru) Generate(name) Replace ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     _get_diopts diopts, `options'
@@ -1763,6 +1798,21 @@ mata set matastrict on
 
 /* Helper functions directly called by ado ----------------------------------*/
 
+void rd_check_mat(`SS' nm, `Int' kind)
+{
+    `RM' m
+    
+    m = st_matrix(nm)
+    if (kind==1) {  // check whether positive integer
+        assert(!any(m:<0))
+        assert(!any(m:!=trunc(m)))
+        return
+    }
+    // check whether in [0,1]
+    assert(!any(m:<0))
+    assert(!any(m:>1))
+}
+
 void rd_Post_common_e()
 {
     st_global("e(cmd)", "reldist")
@@ -1779,6 +1829,7 @@ void rd_Post_common_e()
     else {
         st_global("e(refvar)", st_local("refvar"))
     }
+    st_global("e(nobreak)",   st_local("nobreak"))
     st_global("e(nomid)",     st_local("nomid"))
     st_global("e(pooled)",    st_local("pooled"))
     st_global("e(adjust)",    st_local("adj1"))
@@ -1909,7 +1960,13 @@ struct `ADJ' {
 
 struct `DATA' {
     `Bool'  by        // syntax 1
-    `Bool'  method    // 0 continuous (approx), 1 continuous (exact), 2 discrete
+    `Bool'  method    // 0 continuous: at
+                      // 1 continuous: full atx
+                      // 2 continuous: custom atx,
+                      // 3 discrete: at
+                      // 4 discrete: full atx
+                      // 5 discrete: custom atx
+    `Bool'  tbreak    // break ties
     `Bool'  mid       // use midpoints for relative ranks: 1 yes, 0 no 
     `Bool'  pooled    // use pooled reference distribution
     `Int'   balanced  // balancing: 0 none, 1 comparison, 2 reference
@@ -1946,8 +2003,11 @@ void rd_getdata(`Data' data)
     
     // setup
     data.by       = (st_local("by")!="")
+    data.tbreak   = (st_local("nobreak")=="")
     data.mid      = (st_local("nomid")=="")
-    data.method   = (st_local("atx")!="") + 2*(st_local("discrete")!="")
+    data.method   = (st_local("atx")!="") + // => 1
+                    (st_local("atx2")!="" | st_local("ATX0")!="") + // => 2
+                    3*(st_local("discrete")!="") // => add 3
     data.pooled   = (st_local("pooled")!="")
     data.balanced = (st_local("bal_varlist")!="") + (st_local("bal_ref")!="")
     depvar        = st_varindex(st_local("depvar"))
@@ -2104,23 +2164,20 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `RC' y, `RC' w, `RC' y0, `RC' w0, `Adj' adj,
 void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
 {
     // grid based on outcome values
-    if (data.method) {
-        if (st_local("atx2")!="")      atx = strtoreal(tokens(st_local("atx2")))'
-        else if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
-        else                           atx = uniqrows(*data.Y1 \ *data.Y0)
+    if (mod(data.method,3)==1) {
+        atx = uniqrows(*data.Y1 \ *data.Y0)
+        at = mm_relrank(*data.Y0, *data.W0, atx)
+    }
+    else if (mod(data.method,3)==2) {
+        if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
+        else                      atx = strtoreal(tokens(st_local("atx2")))'
         at = mm_relrank(*data.Y0, *data.W0, atx)
     }
     // grid based on probabilities
     else {
-        if (st_local("at")!="") at = strtoreal(tokens(st_local("at")))'
-        else if (st_local("AT0")!="") {
-            at = _rd_get_at_mat("AT0")
-            if (any(at:<0) | any(at:>1)) {
-                display("{err}values provided in {bf:at()} must be in [0,1]")
-                exit(error(125))
-            }
-        }
-        else at = (0::n-1) / (n-1)
+        if (st_local("at")!="")       at = strtoreal(tokens(st_local("at")))'
+        else if (st_local("AT0")!="") at = _rd_get_at_mat("AT0")
+        else                          at = (0::n-1) / (n-1)
         atx = rd_invcdf(*data.Y0, *data.W0, at)
         if (at[1]==0) {
             if (min(*data.Y1)<atx[1]) {
@@ -2144,18 +2201,304 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
     at = st_matrix(st_local(nm))'
     if (cols(at)>rows(at)) at = at'
     if (cols(at)>1) at = at[,1]
-    return(sort(at,1))
+    return(sort(uniqrows(at),1))
 }
 
 void rd_relrank(`Data' data)
 {
-    data.ranks = mm_relrank(*data.Y0, *data.W0, *data.Y1, data.mid)
+    `RC' y, cdf
+    pragma unset y
+    
+    // get cdf of Y0 at unique and sorted values; y will be filled in
+    cdf = _rd_relrank_cdf(*data.Y0, *data.W0, y)
+
+    // get relative ranks
+    if (!data.tbreak) {
+        // - case 1: tbreak = 0, mid = 0
+        if (!data.mid) data.ranks = _rd_relrank_1(*data.Y1, y, cdf)
+        // - case 2: tbreak = 0, mid = 1
+        else           data.ranks = _rd_relrank_2(*data.Y1, y, cdf)
+    }
+    else if (rows(*data.W1)==1) {
+        // - case 3: tbreak==1, mid = 0, no weights
+        if (!data.mid) data.ranks = _rd_relrank_3(*data.Y1, y, cdf)
+        // - case 4: tbreak==1, mid = 1, no weights
+        else           data.ranks = _rd_relrank_4(*data.Y1, y, cdf)
+    }
+    else {
+        // - case 5: tbreak==1, mid = 0, weighted
+        if (!data.mid) data.ranks = _rd_relrank_5(*data.Y1, *data.W1, y, cdf)
+        // - case 6: tbreak==1, mid = 1, weighted
+        else           data.ranks = _rd_relrank_6(*data.Y1, *data.W1, y, cdf)
+    }
 }
 
-`RC' rd_ogrid(`Bool' one, `Int' n, `Data' data)
+`RC' _rd_relrank_cdf(`RC' X, `RC' w, `RC' x)
+{   // replaces x with uniq and sorted values of X and returns corresponding CDF
+    `Int'  i, n, j
+    `IntC' p
+    `RS'   xi
+    `RC'   cdf
+
+    // sort
+    n = rows(X)
+    p = order((X,(1::n)), (1,2)) //stable sort order
+    x = X[p]
+    
+    // compute ranks
+    if (rows(w)==1) cdf = 1::n
+    else            cdf = quadrunningsum(w[p])
+    
+    // remove ties (get last obs in each group)
+    p = J(n, 1, 0)
+    i = j = n
+    p[j] = i
+    xi = x[i]
+    i--
+    for (; i; i--) {
+        if (x[i]!=xi) {
+            j--
+            p[j] = i
+            xi = x[i]
+        }
+    }
+    p   = p[|j \ n|]
+    x   = x[p]
+    cdf = cdf[p]
+    
+    // return normalized ranks
+    return(cdf / cdf[rows(cdf)])
+}
+
+`RC' _rd_relrank_1(`RC' x, `RC' y, `RC' cdf)
 {
-    if (one) return(rd_invcdf(*data.Y1, *data.W1, (0::n-1)/(n-1)))
-    return(rd_invcdf(*data.Y0, *data.W0, (0::n-1)/(n-1)))
+    `Int'  i, ii, j
+    `IntC' p
+    `RS'   xi
+    `RC'   r
+    
+    p = order(x, 1) // ties will have random order
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) r[ii] = cdf[j]
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+
+`RC' _rd_relrank_2(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, ii, j
+    `IntC' p
+    `RS'   xi
+    `RC'   r, step
+    
+    p = order(x, 1) // ties will have random order
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) r[ii] = cdf[j] - step[j]/2
+            else          r[ii] = cdf[j]
+        }
+        else break // x[ii] is smaller than min(y)
+    }
+    return(r)
+}
+
+`RC' _rd_relrank_3(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, ii, j, k
+    `IntC' p
+    `RS'   xi
+    `RC'   r, step
+    
+    p = order(x, 1) // ties will have random order
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            r[ii] = cdf[j]
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[p[k]]<xi) break
+                }
+                if ((++k)==i) continue // no ties
+                r[p[|k\i-1|]] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
+                i = k
+            }
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+
+`RC' _rd_relrank_4(`RC' x, `RC' y, `RC' cdf)
+{
+    `Int'  i, ii, j, k
+    `IntC' p
+    `RS'   xi
+    `RC'   r, step
+    
+    p = order(x, 1) // ties will have random order
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[p[k]]<xi) break
+                }
+                if ((++k)==i) {
+                    r[ii] = cdf[j] - step[j] * 0.5
+                    continue
+                }
+                r[p[|k\i|]] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
+                i = k
+            }
+            else r[ii] = cdf[j]
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+
+`RC' _rd_relrank_5(`RC' x, `RC' w, `RC' y, `RC' cdf)
+{
+    `Int'  i, ii, j, k
+    `IntC' p
+    `RS'   xi, W
+    `RC'   r, step, ww
+    
+    p = order((x,w), (1,2)) // break ties in ascending order of w
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            r[ii] = cdf[j]
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[p[k]]<xi) break
+                }
+                if ((++k)==i) continue // no ties
+                ww = runningsum(w[p[|k\i|]])
+                W  = ww[rows(ww)]
+                if (W==0) {
+                    r[p[|k\i-1|]] = cdf[j] :- step[j] :* (i:-(k::i-1)) / (i-k+1)
+                }
+                else {
+                    ww = ww[|1\rows(ww)-1|]
+                    r[p[|k\i-1|]] = cdf[j] :- step[j] :* (W:-ww) / W
+                }
+                i = k
+            }
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+
+`RC' _rd_relrank_6(`RC' x, `RC' w, `RC' y, `RC' cdf)
+{
+    `Int'  i, ii, j, k
+    `IntC' p
+    `RS'   xi, W
+    `RC'   r, step, ww, wstep
+    
+    p = order((x,w), (1,2)) // break ties in ascending order of w
+    i = rows(x)
+    r = J(i, 1, 0)
+    j = rows(y)
+    step = cdf - (0 \ cdf[|1\j-1|])
+    for (; i; i--) {
+        ii = p[i]
+        xi = x[ii]
+        for (; j; j--) {
+            if (y[j]<=xi) break
+        }
+        if (j) {
+            if (y[j]==xi) {
+                for (k=i-1; k; k--) { // find ties in x
+                    if (x[p[k]]<xi) break
+                }
+                if ((++k)==i) {
+                    r[ii] = cdf[j] - step[j] * 0.5
+                    continue // no ties
+                }
+                ww = runningsum(w[p[|k\i|]])
+                W  = ww[rows(ww)]
+                if (W==0) {
+                    r[p[|k\i|]] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
+                }
+                else {
+                    wstep = ww - (0 \ ww[|1\rows(ww)-1|])
+                    ww = ww - 0.5 * wstep
+                    r[p[|k\i|]] = cdf[j] :- step[j] :* (W:-ww) / W
+                }
+                i = k
+            }
+            else r[ii] = cdf[j]
+        }
+        else break // x[i] is smaller than min(y)
+    }
+    return(r)
+}
+
+void rd_ogrid(`Data' data, `Bool' cdf)
+{
+    `Int' n
+    `RC'  b
+    `SM'  cstripe
+    
+    n = strtoreal(st_local("ogrid"))
+    if (n<.) {
+        cstripe = J(n,1,""), "q":+strofreal(1::n)
+        if (cdf) b = _rd_ogrid(n, data, 0), _rd_ogrid(n, data, 1)
+        else     b = _rd_ogrid(n, data, 0)
+        st_matrix(st_local("OGRID"), b')
+        st_matrixcolstripe(st_local("OGRID"), cstripe)
+    }
+}
+
+`RC' _rd_ogrid(`Int' n, `Data' data, `Bool' grp)
+{
+    if (grp) return(rd_invcdf(*data.Y1, *data.W1, (0::n-1)/(n-1)))
+             return(rd_invcdf(*data.Y0, *data.W0, (0::n-1)/(n-1)))
 }
 
 `RC' rd_invcdf(`RC' X, `RC' w, `RC' P)
@@ -2214,54 +2557,124 @@ void rd_PDF(`Int' n)
     rd_get_at(data, at, atx, n)
     
     // estimation
-    if (data.method==2) rd_PDF_discrete(data, n, at, atx)
+    if (data.method>=3) rd_PDF_discrete(data, n, at, atx)
     else                rd_PDF_continuous(data, n, at, atx)
     
+    // outcome grid
+    rd_ogrid(data, 0)
 }
 
 void rd_PDF_discrete(`Data' data, `Int' n, `RC' at, `RC' atx)
 {
-    `Int'   i
-    `RS'    b1, b0, at1, at0
-    `RC'    b, pr
-    `SM'    cstripe
-    
-    // prepare data
-    rd_getdata(data)
-    rd_adjust(data)
-    
-    // evaluation grid
-    rd_get_at(data, at, atx, n)
+    `RC'  b
+    `SM'  cstripe
     
     // estimation
-    b = mm_relrank(*data.Y1, *data.W1, atx)
-    b0 = 0; at0 = 0
-    for (i=1;i<=n;i++) {
-        b1 = b[i]; at1 = at[i]
-        b[i] = (b1-b0) / (at1-at0)
-        b0 = b1; at0 = at1
+    if (data.method==4) b = _rd_PDF_discrete_b(*data.Y1, *data.W1, atx, at)
+    else                b = _rd_PDF_discrete_map_b(data, at, atx)
+    
+    // remove missings (relative pdf will be missing for x-values that do not
+    // exist in the reference distribution)
+    if (data.method>3) {
+        if (hasmissing(b)) _rd_PDF_discrete_rm(b, at, atx, n)
     }
     
-    // divergence
-    pr = at - (0 \ at[|1\n-1|])
-    st_numscalar(st_local("DIV"),  sum(b :* ln(b) :* pr))
-    st_numscalar(st_local("CHI2"), sum((b :- 1):^2 :* pr))
-    
-    // // add origin
-    // atx = atx[1] \ atx
-    // at  = 0 \ at
-    // b   = b[1] \ b
-    // n   = rows(b)
-    // st_local("n", strofreal(n, "%18.0g"))
-    
     // return results
-    cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
-    // cstripe = (J(n,1,""), ("_origin" \ strofreal(atx[|2\n|]):+("."+st_local("depvar"))))
+    if (data.method>3) {
+        if (st_local("categorical")!="")
+             cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
+        else cstripe = (J(n,1,""), "x":+strofreal(1::n))
+    }
+    else cstripe = (J(n,1,""), "p":+strofreal(1::n))
     st_matrix(st_local("b"), b')
     st_matrixcolstripe(st_local("b"), cstripe)
     st_matrix(st_local("AT"), (at, atx)')
     st_matrixcolstripe(st_local("AT"), cstripe)
     st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
+}
+
+`RC' _rd_PDF_discrete_map_b(`Data' data, `RC' at, `RC' atx)
+{
+    `Int'  i, j, n, r
+    `RC'   b, rd, cdf, x
+    
+    // compute relative density at observed values
+    x   = uniqrows(*data.Y1 \ *data.Y0)
+    cdf = mm_relrank(*data.Y0, *data.W0, x)
+    rd  = _rd_PDF_discrete_b(*data.Y1, *data.W1, x, cdf)
+    r   = rows(rd)
+    
+    // map rd to evaluation grid
+    n = rows(at)
+    b = J(n, 1, .)
+    j = 1
+    // - mat to at()
+    if (data.method==3) {
+        // first get rid of points that do not exist in refdist and were 
+        // only included to get the computations for the other points right
+        cdf = select(cdf, rd:<.)
+        rd = select(rd, rd:<.)
+        r = rows(rd)
+        for (i=1; i<=n; i++) {
+            for  (; j<r; j++) {
+                if (cdf[j]>=at[i]) break
+            }
+            b[i] = rd[j]
+        }
+        return(b)
+    }
+    // - map to atx()
+    r = rows(rd)
+    for (i=1; i<=n; i++) {
+        for  (; j<r; j++) {
+            if (x[j]>=atx[i]) break
+        }
+        if (x[j]==atx[i]) b[i] = rd[j] // only fill in if exact match
+    }
+    return(b)
+}
+
+`RC' _rd_PDF_discrete_b(`RC' Y, `RC' w, `RC' atx, `RC' at)
+{
+    `Int' n
+    `RC'  b, p
+    
+    b = mm_relrank(Y, w, atx)
+    n = rows(b)
+    b = b  - (0 \  b[|1\n-1|])
+    p = at - (0 \ at[|1\n-1|])
+    b = b :/ p
+    _rd_PDF_discrete_div(b, p)
+    return(b)
+}
+
+void _rd_PDF_discrete_div(`RC' b, `RC' p) // compute divergence and chi2
+{   
+    st_numscalar(st_local("DIV"),  sum(b :* ln(b) :* p))
+    st_numscalar(st_local("CHI2"), sum((b :- 1):^2 :* p))
+}
+
+void _rd_PDF_discrete_rm(`RC' b, `RC' at, `RC' atx, `Int' n)
+{
+    `Int'  i, j
+    `IntC' p
+    
+    p = J(n,1,.)
+    j = 0
+    for (i=1;i<=n;i++) {
+        if (b[i]>=.) {
+            printf("{txt}(x = %g omitted due to zero frequency in reference distribution)\n", atx[i])
+            continue
+        }
+        p[++j] = i
+    }
+    if (j==0) {
+        display("{err}no remaining evaluation points")
+        exit(499)
+    }
+    p = p[|1\j|]
+    b = b[p]; at = at[p]; atx = atx[p]; n = rows(p)
+    st_local("n", strofreal(n, "%18.0g"))
 }
 
 void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
@@ -2299,7 +2712,9 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
         bw = rd_PDF_bw(data.ranks, *data.W1, bwmethod, bwdpi, kernel, n0)
         if (bw>=.) {
             display("{txt}(bandwidth estimation failed; using oversmoothed bandwidth)")
-            bw = rd_PDF_bw(data.ranks, *data.W1, "oversmoothed", bwdpi, kernel, n0)
+            bwmethod = "oversmoothed"
+            st_local("bwmethod", bwmethod)
+            bw = rd_PDF_bw(data.ranks, *data.W1, bwmethod, bwdpi, kernel, n0)
         }
         if (data.wtype==2) {    // adjustment in case of pweights
             bw = bw * (colsum(*data.W1:^2)/rows(*data.W1))^.2
@@ -2371,15 +2786,6 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
             st_matrix(st_local("se"), (st_matrix(st_local("se")), J(1,nhist,0)))
             st_matrixcolstripe(st_local("se"), cstripe)
         }
-    }
-    
-    // outcome grid
-    n = strtoreal(st_local("ogrid"))
-    if (n<.) {
-        cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(0, n, data)
-        st_matrix(st_local("OGRID"), b')
-        st_matrixcolstripe(st_local("OGRID"), cstripe)
     }
 }
 
@@ -2502,7 +2908,7 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
     tdc         = kdens_df(g, gc, c, 1, 1, 1)
     beta        = 1.414 * (sda/tdc)^(1/3) * h^(5/3)
     sdbeta      = kdens_df(g, gc, beta, 0, 1, 1)
-    //siple alternative (Cwik and Mileniczuk 1993):
+    //simple alternative (Cwik and Mileniczuk 1993):
     //c           = 1.781 * lambda * n^(-1/3)
     //sdbeta      = kdens_df(g, gc, c, 0, 1, 1)
     return(((mm_kint_gaussian(2) * (1 + sdbeta))/(n * sdalpha2))^0.2 - h)
@@ -2546,13 +2952,7 @@ void rd_HIST(`Int' n)
     st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     
     // outcome grid
-    n = strtoreal(st_local("ogrid"))
-    if (n<.) {
-        cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(0, n, data)
-        st_matrix(st_local("OGRID"), b')
-        st_matrixcolstripe(st_local("OGRID"), cstripe)
-    }
+    rd_ogrid(data, 0)
 }
 
 `RC' _rd_HIST(`Int' n, `Data' data, `RC' at, `RC' atx)
@@ -2584,27 +2984,16 @@ void rd_CDF(`Int' n)
     // evaluation grid
     rd_get_at(data, at, atx, n)
     
-    // estimation
-    b = mm_relrank(*data.Y1, *data.W1, atx)
-    // if (data.method) { // add (0,0) coordinate
-    //     atx = atx[1] \ atx
-    //     at  = 0 \ at
-    //     b   = 0 \ b
-    //     n   = rows(b)
-    //     st_local("n", strofreal(n, "%18.0g"))
-    // }
-    if (data.method==0) {
-        // interpolate b between steps so that straight line can be used in
-        // graph (equivalent to the expectation of the curve if ties are 
-        // broken randomly)
-        _rd_CDF_ipolate(b, at, atx)
-    }
+    // estimate
+    if (mod(data.method,3)) b = mm_relrank(*data.Y1, *data.W1, atx)
+    else                    b = _rd_CDF_ipolate(data, at)
     
     // return results
-    if (data.method==2) cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
-        //cstripe = (J(n,1,""), ("_origin" \ strofreal(atx[|2\n|]):+("."+st_local("depvar"))))
-    else if (data.method) cstripe = (J(n,1,""), "x":+strofreal(1::n))
-        //cstripe = (J(n,1,""), ("_origin" \ ("x":+strofreal(1::n-1))))
+    if (data.method) {
+        if (st_local("categorical")!="")
+             cstripe = (J(n,1,""), strofreal(atx):+("."+st_local("depvar")))
+        else cstripe = (J(n,1,""), "x":+strofreal(1::n))
+    }
     else cstripe = (J(n,1,""), "p":+strofreal(1::n))
     st_matrix(st_local("b"), b')
     st_matrixcolstripe(st_local("b"), cstripe)
@@ -2612,40 +3001,49 @@ void rd_CDF(`Int' n)
     st_matrixcolstripe(st_local("AT"), cstripe)
     st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     
-    // - outcome grid
-    n = strtoreal(st_local("ogrid"))
-    if (n<.) {
-        cstripe = J(n,1,""), "q":+strofreal(1::n)
-        b = rd_ogrid(0, n, data), rd_ogrid(1, n, data)
-        st_matrix(st_local("OGRID"), b')
-        st_matrixcolstripe(st_local("OGRID"), cstripe)
+    // indicator for whether zero coordinate should be added in graph
+    //    only if: - evaluation has been done at outcome values
+    //             - first y-coordinate is not zero
+    //             - if first evaluation point is not larger than min of Y
+    if (mod(data.method,3)) {
+        if (at[1]>0) {
+            if (mod(data.method, 3)==1)    st_local("origin", "origin")
+            else if (atx[1]<=min(*data.Y1 \ *data.Y0)) st_local("origin", "origin")
+        }
     }
+    
+    // - outcome grid
+    rd_ogrid(data, 1)
 }
 
-void _rd_CDF_ipolate(`RC' b, `RC' at, `RC' atx)
+`RC' _rd_CDF_ipolate(`Data' data, `RC' at)
 {
-    `Int' i, i0, j, n
-    `RS'  b0
+    `Int' i, j
+    `RC'  x, cdf0, cdf1, b
     
-    n = rows(b)
-    i0 = n; b0 = b[i0]
-    for (i=n-1;i;i--) {
-        if (b[i]<b0) {
-            // step encountered; interpolate intermediate values
-            for (j=i0-1; j>i; j--) {
-                b[j] = b0 - (b0-b[i]) * (at[i0]-at[j]) / (at[i0]-at[i])
-            }
-            i0 = i; b0 = b[i0]
-        }
-        else if (atx[i]<atx[i0]) {
-            // flat region; do not interpolate
-            i0 = i; b0 = b[i0]
-        }
+    // obtain exact cdf
+    x    = uniqrows(*data.Y1 \ *data.Y0)
+    cdf1 = 0 \ mm_relrank(*data.Y1, *data.W1, x)
+    cdf0 = 0 \ mm_relrank(*data.Y0, *data.W0, x)
+    
+    // move to point where cdf0 first reaches 1
+    for (j = rows(cdf0); j; j--) {
+        if (cdf0[j]<1) break
     }
-    // handle first segment
-    for (j=i0-1; j; j--) {
-        b[j] = b0 - b0 * (at[i0]-at[j]) / at[i0]
+    j++
+    
+    // interpolate
+    i = rows(at)
+    b = J(i,1,.)
+    for (; i; i--) {
+        for (; j; j--) {
+            if (cdf0[j]<=at[i]) break
+        }
+        if (cdf0[j]==at[i]) b[i] = cdf1[j]
+        else b[i] = cdf1[j] + (cdf1[j+1]-cdf1[j]) * 
+                   (at[i]-cdf0[j]) / (cdf0[j+1] - cdf0[j])
     }
+    return(b)
 }
 
 /* MRP estimation -----------------------------------------------------------*/

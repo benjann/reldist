@@ -35,6 +35,33 @@ Installation from GitHub:
 
 Main changes:
 
+    05jun2020 (version 1.1.3):
+    - new algorithm for computing relative ranks that breaks ties; use option 
+      -nobreak- to employ old algorithm
+    - option atx() can now be used without arguments, i.e. as -atx-, to use the 
+      observed values as evaluation points
+    - -reldist cdf- and -reldist pdf- now both have options -discrete- and 
+      -categorical-; the two options do the same, but -categorical- requests that
+      outcome values are positive integers and labels the coefficients using 
+      factor-variable notation; -discrete- does not impose such a restriction and 
+      labels the coefficients as x#
+    - atx() now only allows positive integers if -categorical- is specified
+    - -reldist cdf- now always computes the relavtive CDF based on exact data and
+      interpolates between the exact points if necessary
+    - -reldist pdf- now allows -n()- or -at()- together with -discrete- or 
+      -categorical-; in this case the discrete relative density is computed based
+      on exact data and then mapped onto the evaluation grid requested by n() or at()
+    - -reldist pdf- with option -discrete- or -categorical- now automatically removes
+      outcome-value evaluation points that do not exist in the reference distribution
+      (the discrete relative density is infinity for these values, but the values 
+      have zero mass on the y-axis, so it appears reasonable to ignore
+      them)
+    - the option to affect the rendition of the reference line was documented as 
+      -refline()- but implemented as -refopts()-; the option is now implemented
+      as documented
+    - e(bwmethod) is now reset to "oversmoothed" if default bandwidth estimation
+      fails
+    
     02jun2020 (version 1.1.2):
     - -reldist pdf- and -reldist cdf- now have option -discrete- to treat data as 
       discrete; evaluation is performed at existing outcome values; pdf is displayed
