@@ -35,6 +35,11 @@ Installation from GitHub:
 
 Main changes:
 
+    07jun2020 (version 1.1.5):
+    - reldist made Stata freeze if the number of evaluation points was too large
+      (due size limits of -matrix-); an error message is now displayed if the
+      number of evaluation points is too large
+    
     05jun2020 (version 1.1.4):
     - made some speed improvements by avoiding repeated storting (data is now sorted
       once when reading the data; subsequent computations then use functions that

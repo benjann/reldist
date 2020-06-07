@@ -1,4 +1,4 @@
-*! version 1.1.4  05jun2020  Ben Jann
+*! version 1.1.5  07jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -959,7 +959,8 @@ program Parse_at   // parse n(), at(), atx, atx(), categorical, descrete
         c_local at "`at'"
         exit
     }
-    if "`n'"=="" c_local n 101
+    Parse_n "`n'" 101
+    c_local n `n'
 end
 
 program Parse_cat_notallowed
@@ -1003,7 +1004,25 @@ program Parse_ogrid
         exit
     }
     if "`ogrid'"=="" local ogrid 201
+    if `ogrid'>=c(max_matdim) {
+        di as err "{bf:ogrid()} must be smaller than"/*
+            */" c(max_matdim) = {bf:`c(max_matdim)'}"
+        exit(499)
+    }
     c_local ogrid `ogrid'
+end
+
+program Parse_n 
+    args n def nm opt
+    if "`n'"==""   local n `def'
+    if "`nm'" =="" local nm "n"
+    if "`opt'"=="" local opt `nm'
+    if `n'>=c(max_matdim) {
+        di as err "{bf:`opt'()} must be smaller than"/*
+            */" c(max_matdim) = {bf:`c(max_matdim)'}"
+        exit(499)
+    }
+    c_local `nm' `n'
 end
 
 program Parse_balance
@@ -1341,9 +1360,8 @@ program PDF, eclass
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
     Parse_ogrid "`noogrid'" "`ogrid'" "`atx'"
-    if "`histogram2'"!=""     local nhist `histogram2'
-    else if "`histogram'"!="" local nhist 10
-    if "`napprox'"==""        local napprox = max(512, `n'+1)
+    if "`histogram'`histogram2'"!="" Parse_n "`histogram2'" 10 "nhist" "histogram"
+    if "`napprox'"=="" local napprox = max(512, `n'+1)
     capt confirm number `bwidth'
     if _rc==0 {
         if `bwidth'<=0 {
@@ -1474,7 +1492,7 @@ program HIST, eclass
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    if "`n'"=="" local n 10
+    Parse_n "`n'" 10
     Parse_ogrid "`noogrid'" "`ogrid'"
     
     // mark sample
@@ -2211,6 +2229,30 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
         n  = rows(atx)
         st_local("n", strofreal(n, "%18.0g"))
     }
+    // check whether n is too large
+    rd_get_at_check_n(n)
+    
+}
+
+void rd_get_at_check_n(`Int' n0)
+{
+    `Int' n, nhist
+    
+    // histogram points will be added to e(b) and must be taken into account
+    nhist = strtoreal(st_local("nhist"))
+    if (nhist<.) n = n0 + nhist
+    else         n = n0
+    
+    // check whether too large
+    if (n>=st_numscalar("c(max_matdim)")) {
+        printf("{err}too many evaluation points;"
+            + " must be smaller than c(max_matdim) = {bf:%g}\n"
+            + "(number of evaluation points" 
+            + (nhist<. ? " including histogram bins" : "")
+            + " is %g)\n"
+            , st_numscalar("c(max_matdim)"), n)
+        exit(499)
+    }
 }
 
 `RC' _rd_get_at_mat(`SS' nm)
@@ -2236,6 +2278,7 @@ void rd_ogrid(`Data' data, `Bool' cdf)
     `SM'  cstripe
     
     n = strtoreal(st_local("ogrid"))
+    // check whether n is too large
     if (n<.) {
         cstripe = J(n,1,""), "q":+strofreal(1::n)
         if (cdf) b = _rd_ogrid(n, data, 0), _rd_ogrid(n, data, 1)
@@ -2250,7 +2293,6 @@ void rd_ogrid(`Data' data, `Bool' cdf)
     if (grp) return(_rd_quantile(*data.Y1, *data.W1, (0::n-1)/(n-1), 1))
              return(_rd_quantile(*data.Y0, *data.W0, (0::n-1)/(n-1), 1))
 }
-
 
 /* PDF estimation -----------------------------------------------------------*/
 
