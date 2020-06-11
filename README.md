@@ -35,6 +35,27 @@ Installation from GitHub:
 
 Main changes:
 
+    11jun2020 (version 1.1.6):
+    - options atx(reference) and atx(comparison) added
+    - new option balance(, contrast): compare unbalanced with balanced distribution
+    - reldist CDF now has option -alt- to use an alternative estimation method
+      based on relative ranks
+    - reldist graph has new option -[y]oline()-
+    - -reldist olabel- has new option -line()-
+    - option -otick- in -reldist olabel- is now called -tick()
+    - [y]label() etc. may now repeated
+    - [y]otitle() is now also printed if no labels or ticks are requested
+    - default for ogrid() has been increased to 401
+    - -reldist sum- returned error of -balance()- was specified; this is fixed
+    - minor changes to output header
+    - option -descending- added
+    - adjust(,multiplicative) now returns error if the adjustment factor is 0, 
+      negative, or missing
+    - interpolation of relative CDF improved for 0<at<1 if an upright segment is
+      hit: now using midpoint of upright segment insted of ceiling
+    - internal function _rd_quantile() returned error if X only had one row; this is fixed
+    - internal function _rd_uniq() returned error if X hat less than two rows; this is fixed
+    
     07jun2020 (version 1.1.5):
     - reldist made Stata freeze if the number of evaluation points was too large
       (due size limits of -matrix-); an error message is now displayed if the

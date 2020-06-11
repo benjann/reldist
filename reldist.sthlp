@@ -1,5 +1,5 @@
 {smcl}
-{* 05jun2020}{...}
+{* 11jun2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -74,6 +74,8 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt nomid}}do not use midpoints when computing relative ranks
     {p_end}
+{synopt:{opt desc:ending}}sort tied observations in descending order of weights
+    {p_end}
 {synopt:{opt pool:ed}}use pooled distribution as reference distribution
     {p_end}
 {synopt:{cmdab:adj:ust(}{help reldist##adjust:{it:spec}}{cmd:)}}location and scale adjustment (not allowed for {cmd:mrp})
@@ -86,7 +88,7 @@ help for {hi:reldist}
     {p_end}
 {synopt:{cmd:at(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on probability scale
     {p_end}
-{synopt:{cmd:atx}[{cmd:(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}]}evaluate relative density at outcome values
+{synopt:{cmd:atx}[{cmd:(}{help reldist##pdfatx:{it:spec}}{cmd:)}]}evaluate relative density at outcome values
     {p_end}
 {synopt:{opt discr:ete}}treat data as discrete
     {p_end}
@@ -115,11 +117,13 @@ help for {hi:reldist}
     {p_end}
 {synopt:{cmd:at(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}}use custom evaluation grid on probability scale
     {p_end}
-{synopt:{cmd:atx}[{cmd:(}{help numlist:{it:numlist}}|{it:matname}{cmd:)}]}evaluate relative CDF at outcome values
+{synopt:{cmd:atx}[{cmd:(}{help reldist##cdfatx:{it:spec}}{cmd:)}]}evaluate relative CDF at outcome values
     {p_end}
 {synopt:{opt discr:ete}}treat data as discrete
     {p_end}
 {synopt:{opt cat:egorical}}treat data as categorical
+    {p_end}
+{synopt:{opt alt}}use alternative estimation method
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
@@ -230,10 +234,13 @@ help for {hi:reldist}
     {p_end}
 
 {syntab:Outcome labels}
-{synopt:[{cmd:y}]{cmdab:olab:el:(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome labels
+{synopt:[{cmd:y}]{cmdab:olab:el(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome labels
     on secondary axis
     {p_end}
-{synopt:[{cmd:y}]{cmdab:otic:k:(}{help reldist##otick:{it:spec}}{cmd:)}}add outcome ticks
+{synopt:[{cmd:y}]{cmdab:otic:k(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome ticks
+    on secondary axis
+    {p_end}
+{synopt:[{cmd:y}]{cmdab:oli:ne(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome lines
     on secondary axis
     {p_end}
 {synopt:[{cmd:y}]{cmdab:oti:tle(}{help title_options:{it:tinfo}}{cmd:)}}title for outcome scale axis
@@ -337,6 +344,13 @@ help for {hi:reldist}
     steps in the CDF. Option {cmd:nomid} has no effect for {cmd:reldist cdf}.
 
 {phang}
+    {opt descending} sorts tied observations in descending order of
+    weights. The default is to use ascending sort order. Option
+    {opt descending} has no effect if {cmd:nobreak} is specified or
+    if there are no weights. Furthermore, it has no effect
+    for {cmd:reldist cdf}.
+
+{phang}
     {opt pooled} uses the pooled distribution across both groups (syntax 1) or
     across both variables (syntax 2) as the reference distribution.
 
@@ -382,7 +396,9 @@ help for {hi:reldist}
 
 {phang2}
     {opt mult:iplicative} uses a multiplicative adjustment instead of an additive
-    adjustment. {cmd:scale} is not allowed in this case.
+    adjustment. The location ratio
+    between comparison distribution and reference distribution must be
+    strictly positive and {cmd:scale} is not allowed in this case.
 
 {phang2}
     {opt log:arithmic} performs the adjustments on logarithmically transformed
@@ -411,6 +427,16 @@ help for {hi:reldist}
     {opt ref:erence} reweights the covariate distribution of the reference group. The
     default is to reweight the covariate distribution of the comparison group. Option
     {cmd:pooled} is not allowed with {cmd:balance(, reference)}.
+
+{phang2}
+    {opt cont:rast} compares the balanced distribution with the unbalanced
+    distribution. Use this option to see how the balancing changes the
+    distribution. If {cmd:contrast} is specified together with {cmd:reference},
+    the balanced reference distribution will be used as the comparison
+    distribution. If {cmd:contrast} is specified without {cmd:reference}, the
+    balanced comparison distribution will be used as the reference
+    distribution. Option {cmd:pooled} is not allowed with
+    {cmd:balance(, contrast)}.
 
 {phang2}
     {opt name(name)} stores the results from {helpb kmatch} under {it:name} using
@@ -442,18 +468,23 @@ help for {hi:reldist}
     depending on which is larger). Only
     one of {cmd:n()}, {cmd:at()}, and {cmd:atx()} is allowed.
 
+{marker pdfatx}{...}
 {phang}
-    {cmd:atx}[{cmd:(}{it:numlist}|{it:matname}{cmd:)}], specified without argument,
-    causes the relative PDF to be evaluated at each existing outcome value (possibly
-    after applying {cmd:adjust()}), instead of using a regular evaluation grid
-    on the probability scale. As an alternative to using the observed outcome values,
-    it is also possible to specify a grid of custom values, either by providing a
-    {help numlist:{it:numlist}} or the name of a matrix containing the values (the
-    values will be taken from the first row or the first column of the matrix,
-    depending on which is larger). Only one of {cmd:n()}, {cmd:at()},
-    and {cmd:atx()} is allowed. The {cmd:vce()} option is not
-    allowed if {cmd:atx()} is specified (unless {cmd:categorical} is also
-    specified).
+    {cmd:atx}[{cmd:(}{cmdab:comp:arison}|{cmdab:ref:erence}|{it:numlist}|{it:matname}{cmd:)}],
+    specified without argument, causes the relative PDF to be evaluated at each
+    distinct outcome value that exists in the data (possibly after applying
+    {cmd:adjust()}), instead of using a regular evaluation grid on the
+    probability scale. All outcome values across both distributions will be
+    considered. To restrict the evaluation points to outcome values from the
+    comparison distribution or from the reference distribution, specify
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. As an
+    alternative to using observed outcome values, it is also possible to
+    specify a grid of custom values, either by providing a
+    {help numlist:{it:numlist}} or the name of a matrix containing the values
+    (the values will be taken from the first row or the first column of the
+    matrix, depending on which is larger). Only one of {cmd:n()}, {cmd:at()},
+    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if
+    {cmd:atx()} is specified (unless {cmd:categorical} is also specified).
 
 {phang}
     {cmd:discrete} causes the data to be treated as discrete. The relative PDF
@@ -602,18 +633,23 @@ help for {hi:reldist}
     depending on which is larger). Only one of {cmd:n()}, {cmd:at()}, and {cmd:atx()}
     is allowed.
 
+{marker cdfatx}{...}
 {phang}
-    {cmd:atx}[{cmd:(}{it:numlist}|{it:matname}{cmd:)}], specified without argument,
-    causes the relative CDF to be evaluated at each existing outcome value (possibly
-    after applying {cmd:adjust()}), instead of using a regular evaluation grid
-    on the probability scale. As an alternative to using the observed
-    outcome values, it is also possible to specify a grid of custom values,
-    either by providing a {help numlist:{it:numlist}} or the name of a matrix
-    containing the values (the values will be taken from the first row or the
-    first column of the matrix, depending on which is larger). Only one of
-    {cmd:n()}, {cmd:at()}, and {cmd:atx()} is allowed. The {cmd:vce()} option
-    is not allowed if {cmd:atx()} is specified (unless {cmd:categorical} is also
-    specified).
+    {cmd:atx}[{cmd:(}{cmdab:comp:arison}|{cmdab:ref:erence}|{it:numlist}|{it:matname}{cmd:)}],
+    specified without argument, causes the relative CDF to be evaluated at each
+    distinct outcome value that exists in the data (possibly after applying
+    {cmd:adjust()}), instead of using a regular evaluation grid on the
+    probability scale. All outcome values across both distributions will be
+    considered. To restrict the evaluation points to outcome values from the
+    comparison distribution or from the reference distribution, specify
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. As an
+    alternative to using observed outcome values, it is also possible to
+    specify a grid of custom values, either by providing a
+    {help numlist:{it:numlist}} or the name of a matrix containing the values
+    (the values will be taken from the first row or the first column of the
+    matrix, depending on which is larger). Only one of {cmd:n()}, {cmd:at()},
+    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if
+    {cmd:atx()} is specified (unless {cmd:categorical} is also specified).
 
 {phang}
     {cmd:discrete} causes the data to be treated as discrete. The relative CDF
@@ -628,6 +664,15 @@ help for {hi:reldist}
     {cmd:categorical} has the same effect as {cmd:discrete}, but requests that
     the data only contains positive integers and uses factor-variable notation to
     label the coefficient in the output table.
+
+{phang}
+    {cmd:alt} uses an alternative estimation method. The default method obtains
+    the relative CDF by computing the empirical CDFs of both distributions at
+    all values that exist in the data (across both distributions). The
+    alternative methods obtains the relative CDF based on the empirical CDF of
+    the relative ranks that the values of the comparison distribution take on in the
+    reference distribution. In both cases, if necessary, linear interpolation will then be used
+    to map the relative CDF to the evaluation points.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -853,14 +898,27 @@ help for {hi:reldist}
 {pmore}
     {cmd:olabel()} adds outcome labels for the reference distribution; {cmd:yolabel()}
     adds outcome labels for the comparison distribution (only allowed after
-    {cmd:reldist cdf}).
+    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:olabel()} may be specified multiple times.
 
 {phang}
     [{cmd:y}]{opt otick(spec)} adds outcome ticks on a secondary axis. Syntax
     and computation is as for {cmd:olabel()}. {cmd:otick()} adds
     outcome ticks for the reference distribution; {cmd:yotick()} adds outcome
     ticks for the comparison distribution (only allowed after
-    {cmd:reldist cdf}).
+    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:otick()} may be specified multiple times.
+
+{phang}
+    [{cmd:y}]{opt oline(spec)} draws added lines at the positions of
+    the specified outcome values on a secondary axis. The syntax of {it:spec} is
+
+            {it:{help numlist}} [{cmd:,} {it:suboptions} ]
+
+{pmore}
+    where {it:suboptions} are as described in help
+    {it:{help added_line_options}}. {cmd:oline()} adds
+    outcome lines for the reference distribution; {cmd:yoline()} adds outcome
+    lines for the comparison distribution (only allowed after
+    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:oline()} may be specified multiple times.
 
 {phang}
     [{cmd:y}]{opt otitle(tinfo)} provides a title for the outcome scale
@@ -877,12 +935,13 @@ help for {hi:reldist}
 
 {p 8 17 2}
     {cmd:reldist} {opt olab:el} [{it:{help numlist}}] [{cmd:,}
-        {opth for:mat(%fmt)} {opth otic:k(numlist)} {opt y} ]
+        {opth for:mat(%fmt)} {opth tic:k(numlist)} {opth li:ne(numlist)} {opt y} ]
 
 {pstd}
     where {it:numlist} specifies values for which labels be generated,
-    {cmd:format()} specifies the display format for the labels, {cmd:otick()}
-    specifies values for which ticks be generated, and {cmd:y} request outcome labels
+    {cmd:format()} specifies the display format for the labels, {cmd:tick()}
+    specifies values for which ticks be generated, {cmd:line()}
+    specifies values for which added lines be generated, and {cmd:y} request outcome labels
     for the Y axis of the relative CDF (only allowed after
     {cmd:reldist cdf}). The command returns the following macros in {cmd:r()}:
 
@@ -893,7 +952,11 @@ help for {hi:reldist}
     {p_end}
 {p2col:{cmd:r(tick)}}tick specification for use in an {helpb axis_label_options:xtick()} option
     {p_end}
-{p2col:{cmd:r(tick_x)}}expanded and sorted {it:numlist} from {cmd:otick()}
+{p2col:{cmd:r(tick_x)}}expanded and sorted {it:numlist} from {cmd:tick()}
+    {p_end}
+{p2col:{cmd:r(line)}}line specification for use in an {helpb added_line_options:xline()} option
+    {p_end}
+{p2col:{cmd:r(line_x)}}expanded and sorted {it:numlist} from {cmd:line()}
     {p_end}
 
 {dlgtab:General graph options}
@@ -1219,9 +1282,11 @@ help for {hi:reldist}
 {synopt:{cmd:e(refvar)}}name of {it:refvar} (syntax 2 only){p_end}
 {synopt:{cmd:e(nobreak)}}{cmd:nobreak} or empty{p_end}
 {synopt:{cmd:e(nomid)}}{cmd:nomid} or empty{p_end}
-{synopt:{cmd:e(atx)}}{cmd:atx} or empty{p_end}
+{synopt:{cmd:e(descending)}}{cmd:descending} or empty{p_end}
+{synopt:{cmd:e(atx)}}{cmd:atx}, {cmd:comparison}, {cmd:reference} or empty{p_end}
 {synopt:{cmd:e(discrete)}}{cmd:discrete} or empty{p_end}
 {synopt:{cmd:e(categorical)}}{cmd:categorical} or empty{p_end}
+{synopt:{cmd:e(alt)}}{cmd:alt} or empty{p_end}
 {synopt:{cmd:e(origin)}}{cmd:origin} or empty{p_end}
 {synopt:{cmd:e(pooled)}}{cmd:pooled} or empty{p_end}
 {synopt:{cmd:e(adjust)}}list of comparison distribution adjustments{p_end}
@@ -1233,6 +1298,7 @@ help for {hi:reldist}
 {synopt:{cmd:e(balance)}}list of balancing variables{p_end}
 {synopt:{cmd:e(balmethod)}}balancing method{p_end}
 {synopt:{cmd:e(balref)}}{cmd:reference} or empty{p_end}
+{synopt:{cmd:e(balcontrast)}}{cmd:contrast} or empty{p_end}
 {synopt:{cmd:e(balopts)}}options passed through to {cmd:kmatch}{p_end}
 {synopt:{cmd:e(over)}}name of {it:overvar}{p_end}
 {synopt:{cmd:e(over_namelist)}}values of over variable{p_end}

@@ -1,4 +1,4 @@
-*! version 1.1.5  07jun2020  Ben Jann
+*! version 1.1.6  11jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -175,74 +175,93 @@ program Replay
             else                   local by1 `"`e(by1)'"'
             if `"`e(by0lab)'"'!="" local by0 `"`e(by0lab)'"'
             else                   local by0 `"`e(by0)'"'
-            local lby  = strlen(`"`by'"')
-            local lbyl = max(strlen(`"`by1'"'), strlen(`"`by0'"'))
+            mata: Strlen("lby", st_local("by"))
+            mata: Strlen("lbyl", st_local("by1"), st_local("by0"))
             local ll   = `lby' + `lbyl' + 3
-            if `ll'>31 {
-                if `lby'<=14 {
-                    local by1  = abbrev(`"`by1'"', 28 - `lby')
-                    local by0  = abbrev(`"`by0'"', 28 - `lby')
+            if `ll'>40 {
+                if `lby'<=18 {
+                    mata: Abbrev("by1", st_local("by1"), 37 - `lby')
+                    mata: Abbrev("by0", st_local("by0"), 37 - `lby')
                 }
-                else if `lbyl'<=14 {
-                    local by   = abbrev(`"`by'"', 28 - `lbyl')
-                    local lby  = strlen(`"`by'"')
+                else if `lbyl'<=19 {
+                    mata: Abbrev("by", st_local("by"), 37 - `lbyl')
+                    mata: Strlen("lby", st_local("by"))
                 }
                 else {
-                    local by   = abbrev(`"`by'"', 14)
-                    local lby  = 14
-                    local by1  = abbrev(`"`by1'"', 14)
-                    local by0  = abbrev(`"`by0'"', 14)
+                    local by   = abbrev(`"`by'"', 18)
+                    local lby  = 18
+                    local by1  = abbrev(`"`by1'"', 19)
+                    local by0  = abbrev(`"`by0'"', 19)
                 }
             }
-            local ll = `lby' + strlen(`"`by0'"') + 3
+            mata: Strlen("ll", st_local("by0"))
+            local ll = `lby' + `ll' + 3
             local line1 `"`by' = {res:`by1'}"'
             local line2 `"`by' = {res:`by0'}"'
+            if `"`e(balcontrast)'"'!="" {
+                if `"`e(balref)'"'!="" local line1 "(balanced F0)"
+                else                   local line2 "(balanced F1)"
+            }
         }
         else {
-            local line1 = abbrev(`"`e(depvar)'"', 31)
+            local line1 = abbrev(`"`e(depvar)'"', 32)
             local line1 `"{res:`line1'}"'
-            local line2 = abbrev(`"`e(refvar)'"', 31)
-            local ll = strlen(`"`line2'"')
+            local line2 = abbrev(`"`e(refvar)'"', 32)
+            mata: Strlen("ll", st_local("line2"))
             local line2 `"{res:`line2'}"'
         }
-        local line1 `" F comparison: `line1'"'
-        local line2 `" F0 reference: `line2'"'
+        local line1 `"  F1: `line1'"'
+        local line2 `"  F0: `line2'"'
         local j 2
         if `"`e(pooled)'"'!="" {
-            if `ll'<=22 {
+            if `ll'<=31 {
                 local line2 `"`line2' (pooled)"'
             }
             else {
                 local ++j
-                local line`j' "               (pooled)"
+                local line`j' "      (pooled)"
             }
         }
         if `"`e(adjust)'`e(refadjust)'"'!="" {
             local ++j
-            if `"`e(adjust)'"'!=""    local line`j' `"{res:`e(adjust)'}"'
-            else                      local line`j' `"(none)"'
-            local line`j' `" Adjustment F: `line`j''"'
-            local ++j
-            if `"`e(refadjust)'"'!="" local line`j' `"{res:`e(refadjust)'}"'
-            else                      local line`j' `"(none)"'
-            local line`j' `"           F0: `line`j''"'
+            local line`j' `"  Adjustment"'
             local adjopts `"`e(adjmean)' `e(adjsd)' `e(adjmult)' `e(adjlog)'"'
             local adjopts: list retok adjopts
             if `"`adjopts'"'!="" {
-                local ++j
-                local line`j' `"         type: {res:`adjopts'}"'
+                local line`j' `"`line`j'' ({res:`adjopts'})"'
             }
+            
+            local ++j
+            if `"`e(adjust)'"'!=""    local line`j' `"{res:`e(adjust)'}"'
+            else                      local line`j' `"(none)"'
+            local line`j' `"      F1: `line`j''"'
+            local ++j
+            if `"`e(refadjust)'"'!="" local line`j' `"{res:`e(refadjust)'}"'
+            else                      local line`j' `"(none)"'
+            local line`j' `"      F0: `line`j''"'
         }
         if `"`e(balance)'"'!="" {
             local ++j
-            local line`j' " Balancing"
+            local line`j' "  Balancing of"
             if `"`e(balref)'"'!="" local line`j' `"`line`j'' F0"'
-            else                   local line`j' `"`line`j''  F"'
-            local line`j' `"`line`j'': method = {res:`e(balmethod)'}"'
+            else                   local line`j' `"`line`j'' F1"'
             local ++j
-            
-            local xvars = abbrev(`"`e(balance)'"',31)
-            local line`j' "        xvars: `xvars'"
+            local line`j' `"      method = {res:`e(balmethod)'}"'
+            local ++j
+            local i 0
+            if `"`e(by)'"'!="" local i = `i' + 2
+            if "`subcmd'"=="pdf" {
+                if `"`e(discrete)'"'==""   local i = `i' + 1
+                if `"`e(divergence)'"'!="" local i = `i' + 1
+                if `"`e(chi2)'"'!=""       local i = `i' + 1
+            }
+            if `j'>`i' {
+                mata: Abbrev("xvars", st_global("e(balance)"), 72, 1)
+            }
+            else {
+                mata: Abbrev("xvars", st_global("e(balance)"), 40, 1)
+            }
+            local line`j' "      `xvars'"
         }
         _coef_table_header
         local i 0
@@ -436,35 +455,79 @@ program _GRAPH_get_CI // obtain CI, if available
     else c_local hashci
 end
 
-program _GRAPH_olab // returns oaxis, twopts
+program _GRAPH_olab // returns [y]oaxis, [y]olabopts, options
     _parse comma xy 0 : 0
-    syntax [, `xy'olabel(str asis) `xy'otick(str asis) `xy'otitle(str asis) * ]
+    local XY = strupper("`xy'")
+    local xy0 "`xy'"
+    if "`xy0'"=="" local xy0 x
+    // otitle (only allowed once)
+    syntax [, `XY'OTItle(str asis) * ]
+    local options0: copy local options
+    if `"``xy'otitle'"'!="" {
+        _parse comma `xy'otitle 0 : `xy'otitle
+        syntax [, * ]
+        if `"``xy'otitle'"'=="" local `xy'otitle `""""'
+        local otitle `xy0'title(``xy'otitle', axis(2) `options')
+    }
+    local options: copy local options0
+    // olabel(), otick(), oline() (repeated options allowed)
+    local olabopts
+    local hasolab 0
+    local 0 `", `options'"'
+    while (1) {
+        __GRAPH_olab `xy' `0'
+        if (`"`oopts'"'=="") continue, break
+        if "`olabok'"!="" local hasolab 1
+        local olabopts `olabopts' `oopts'
+        local 0 `", `options'"'
+    }
+    // returns
+    c_local options `options'
+    if (`"`olabopts'`otitle'"'=="") exit
+    if `"`otitle'"'=="" local otitle `xy0'title("", axis(2))
+    local olabopts `olabopts' `otitle'
+    if `hasolab'==0 {
+        // suppress default labels
+        local olabopts `xy0'label(none, axis(2)) `olabopts'
+    }
+    c_local `xy'olabopts `olabopts'
+    c_local `xy'oaxis `xy0'axis(1 2) // add to each plot so that axes do not move
+end
+
+program __GRAPH_olab // returns oopts, olabok and options
+    _parse comma xy 0 : 0
+    local XY = strupper("`xy'")
+    syntax [, `XY'OLABel(str asis) `XY'OTICk(str asis) `XY'OLIne(str asis) * ]
     if "`xy'"=="y" {
         local olabel `"`yolabel'"'
-        local otick `"`yotick'"'
-        local otitle `"`yotitle'"'
+        local otick  `"`yotick'"'
+        local oline  `"`yoline'"'
     }
-    local twopts `options'
-    // otitle
-    _parse comma otitle 0 : otitle
-    syntax [, * ]
-    if `"`otitle'"'=="" local otitle `""""'
-    local otitle  `"`otitle'"'
-    local otiopts `"`options'"'
-    // olabel and otick
+    c_local oopts // reset
+    c_local options `options'
+    // olabel
     if `"`olabel'"'!="" {
         local 0 `"`olabel'"'
         syntax [anything] [, FORmat(passthru) * ]
         local olabel `"`anything'"'
         local olabopts `"`options'"'
     }
+    // otick
     if `"`otick'"'!="" {
         local 0 `"`otick'"'
         syntax [anything] [, * ]
         local otick `"`anything'"'
         local otickopts `"`options'"'
     }
-    if `"`olabel'`otick'"'=="" exit     // nothing to do
+    // oline
+    if `"`oline'"'!="" {
+        local 0 `"`oline'"'
+        syntax [anything] [, * ]
+        local oline `"`anything'"'
+        local olineopts `"`options'"'
+    }
+    // get positions
+    if `"`olabel'`otick'`oline'"'=="" exit     // nothing to do
     if `"`e(atx)'"'=="" {
         capt confirm matrix e(ogrid)
         if _rc==1 exit _rc
@@ -473,22 +536,24 @@ program _GRAPH_olab // returns oaxis, twopts
             exit
         }
     }
-    OLABEL `"`olabel'"', otick(`"`otick'"') `format' `xy'
+    OLABEL `"`olabel'"', tick(`"`otick'"') line(`"`oline'"') `format' `xy'
     local olabel `"`r(label)'"'
     local otick  `"`r(tick)'"'
+    local oline  `"`r(line)'"'
     // returns
     if "`xy'"=="" local xy x
     if `"`olabel'"'!="" {
-        local twopts `xy'label(`olabel', axis(2) `olabopts') `twopts'
-    }
-    else {
-        local twopts `xy'label(none, axis(2)) `twopts'
+        local oopts `xy'label(`olabel', axis(2) `olabopts')
+        local olabok "ok"
     }
     if `"`otick'"'!="" {
-        local twopts `xy'tick(`otick', axis(2) `otickopts') `twopts'
+        local oopts `oopts' `xy'tick(`otick', axis(2) `otickopts')
     }
-    c_local oaxis `xy'axis(1 2) // add to each plot so that axes do not move
-    c_local twopts `xy'title(`otitle', axis(2) `otiopts') `twopts'
+    if `"`oline'"'!="" {
+        local oopts `oopts' `xy'line(`oline', axis(2) `olineopts') 
+    }
+    c_local oopts `oopts'
+    c_local olabok `olabok'
 end
 
 program _GRAPH_xyti // return xti, yti
@@ -510,13 +575,18 @@ program _GRAPH_xyti // return xti, yti
         if `"`e(pooled)'"'!="" {
             local xti `"`xti' (pooled)"'
         }
-        c_local xti `"`xti'"'
         if `"`e(by1lab)'"'!="" {
-            c_local yti `"`e(by1lab)'"'
+            local yti `"`e(by1lab)'"'
         }
         else {
-            c_local yti `"`e(by)' = `e(by1)'"'
+            local yti `"`e(by)' = `e(by1)'"'
         }
+        if `"`e(balcontrast)'"'!="" {
+            if `"`e(balref)'"'!="" local yti `"`xti' (balanced)"'
+            else                   local xti `"`yti' (balanced)"'
+        }
+        c_local xti `"`xti'"'
+        c_local yti `"`yti'"'
     }
 end
 
@@ -524,13 +594,15 @@ program GRAPH_pdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         NOREFline REFline(str) NOHISTogram HISTopts(str) ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
     _GRAPH_pdf_histopts, `histopts'
-    _GRAPH_get_gropts `options'
      
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
+    _GRAPH_olab, `options'
+    
+    // separate twopts from other graph options
+    _GRAPH_get_gropts `options'
+    local twopts `olabopts' `twopts'
     
     // get data
     local npdf = e(n)
@@ -622,12 +694,14 @@ program GRAPH_histogram
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         NOREFline REFline(str) ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
         addplot(str asis) * ]
-    _GRAPH_get_gropts `options'
      
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
+    _GRAPH_olab, `options'
+    
+    // separate twopts from other graph options
+    _GRAPH_get_gropts `options'
+    local twopts `olabopts' `twopts'
     
     // check number of obs and expand data if necessary
     local n = e(n_hist)
@@ -677,17 +751,17 @@ program GRAPH_cdf
     // syntax
     syntax [, Level(passthru) NOCI ci(name) CIOPTs(str) ///
         NOREFline REFline(str) NOORIGin ///
-        OLABel(passthru) OTICk(passthru) OTItle(passthru) ///
-        YOLABel(passthru) YOTICk(passthru) YOTItle(passthru) ///
         addplot(str asis) * ]
-    _GRAPH_get_gropts `options'
-    
+
     // obtain original scale labels
-    _GRAPH_olab, `olabel' `otick' `otitle' `twopts'
-    local oaxis0 `oaxis'
-    local oaxis
-    _GRAPH_olab y, `yolabel' `yotick' `yotitle' `twopts'
-    local oaxis `oaxis' `oaxis0'
+    _GRAPH_olab, `options'
+    _GRAPH_olab y, `options'
+    local olabopts `olabopts' `yolabopts'
+    local oaxis `oaxis' `yoaxis'
+    
+    // separate twopts from other graph options
+    _GRAPH_get_gropts `options'
+    local twopts `olabopts' `twopts'
     
     // get coordinates
     tempname B AT
@@ -753,20 +827,21 @@ program OLABEL, rclass
         exit 301
     }
     _parse comma lhs 0 : 0
-    syntax [, OTICk(numlist sort) FORmat(str) y ]
+    syntax [, TICk(numlist sort) LIne(numlist sort) FORmat(str) y ]
     if "`y'"!="" {
         if `"`e(subcmd)'"'!="cdf" {
             di as err "option {bf:y} only allowed after {bf:reldist cdf}"
             exit 499
         }
     }
-    return local tick_x `"`otick'"'
+    return local tick_x `"`tick'"'
+    return local line_x `"`line'"'
     if `"`format'"'=="" local format "%6.0g"
     confirm format `format'
-    local 0 `", olabel(`lhs')"'
-    syntax [, OLABel(numlist sort) ]
-    return local label_x `"`olabel'"'
-    if `"`olabel'`otick'"'=="" exit // nothing to do
+    local 0 `", label(`lhs')"'
+    syntax [, LABel(numlist sort) ]
+    return local label_x `"`label'"'
+    if `"`label'`tick'`line'"'=="" exit // nothing to do
     local atx = (`"`e(atx)'"'!="")
     if (`atx'==0) {
         capt confirm matrix e(ogrid)
@@ -784,10 +859,12 @@ program OLABEL, rclass
             }
         }
     }
-    mata: rd_olab("`y'"!="", `atx', "olabel", "`format'")
-    mata: rd_olab("`y'"!="", `atx', "otick", "")
-    return local label `"`olabel'"'
-    return local tick  `"`otick'"'
+    mata: rd_olab("`y'"!="", `atx', "label", "`format'")
+    mata: rd_olab("`y'"!="", `atx', "tick", "")
+    mata: rd_olab("`y'"!="", `atx', "line", "")
+    return local label `"`label'"'
+    return local tick  `"`tick'"'
+    return local line  `"`line'"'
 end
 
 program Parse_syntax    // preprocess syntax: two-sample vs. paired
@@ -903,6 +980,16 @@ program Parse_at   // parse n(), at(), atx, atx(), categorical, descrete
         if `"`atx2'"'=="" exit // atx without argument; use observed values
         c_local atx atx
         if `: list sizeof atx2'==1 {
+            if `"`atx2'"'==substr("comparison", 1, max(strlen(`"`atx2'"'), 4)) {
+                c_local atx "comparison"
+                c_local atx2
+                exit
+            }
+            if `"`atx2'"'==substr("reference", 1, max(strlen(`"`atx2'"'), 3)) {
+                c_local atx "reference"
+                c_local atx2
+                exit
+            }
             capt confirm matrix `atx2'
             if _rc==1 exit _rc
             if _rc==0 {
@@ -1003,7 +1090,7 @@ program Parse_ogrid
         }
         exit
     }
-    if "`ogrid'"=="" local ogrid 201
+    if "`ogrid'"=="" local ogrid 401
     if `ogrid'>=c(max_matdim) {
         di as err "{bf:ogrid()} must be smaller than"/*
             */" c(max_matdim) = {bf:`c(max_matdim)'}"
@@ -1043,15 +1130,22 @@ program Parse_balance
     }
     local 0 `"`rhs'"'
     capt n syntax [, ate att atc ///
-        Method(str) name(name) NOIsily REFerence WGENerate(name) NOGENLIST NOWARN * ]
+        Method(str) name(name) NOIsily REFerence CONTrast ///
+        WGENerate(name) NOGENLIST NOWARN * ]
     if _rc==1 exit _rc
     if _rc {
         di as err "(error in option {bf:balance()})"
         exit 198
     }
-    if "`pooled'"!="" & "`reference'"!="" {
-        di as err "option {bf:pooled} not allowed with {bf:balance(, reference)}"
-        exit 198
+    if "`pooled'"!="" {
+        if "`reference'"!="" {
+            di as err "option {bf:pooled} not allowed with {bf:balance(, reference)}"
+            exit 198
+        }
+        if "`contrast'"!="" {
+            di as err "option {bf:pooled} not allowed with {bf:balance(, contrast)}"
+            exit 198
+        }
     }
     foreach opt in ate att atc {  // other option to disallow?
         if `"``opt''"'!="" {
@@ -1071,14 +1165,15 @@ program Parse_balance
         di as err "(error in option {bf:balance()})"
         exit 198
     }
-    c_local bal_varlist   `"`balance'"'
-    c_local bal_method    `method'
-    c_local bal_name      `name'
-    c_local bal_noisily   `noisily'
-    c_local bal_ref       `reference'
-    c_local bal_wvar      `wgenerate'
-    c_local bal_nowarn    `nowarn'
-    c_local bal_opts      `options'
+    c_local bal_varlist  `"`balance'"'
+    c_local bal_method   `method'
+    c_local bal_name     `name'
+    c_local bal_noisily  `noisily'
+    c_local bal_ref      `reference'
+    c_local bal_contrast `contrast'
+    c_local bal_wvar     `wgenerate'
+    c_local bal_nowarn   `nowarn'
+    c_local bal_opts     `options'
 end
 
 program Balance // returns bal_Nout
@@ -1341,7 +1436,7 @@ program PDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
-        NOBReak NOMID ADJust(str) BALance(str) ///
+        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         BWidth(str) BWADJust(numlist >0 max=1) ///
@@ -1352,6 +1447,7 @@ program PDF, eclass
         HISTogram HISTogram2(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
+    if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'" "`categorical'"
@@ -1483,11 +1579,12 @@ program HIST, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
-        NOBReak NOMID ADJust(str) BALance(str) ///
+        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >0 max=1) ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
+    if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     Parse_adjust `adjust'
@@ -1534,13 +1631,14 @@ program CDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
-        NOBReak NOMID ADJust(str) BALance(str) ///
-        n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
+        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
+        n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical alt ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
     local nobreak nobreak // enforce nobreak; only affects e()-returns
     local nomid nomid     // enforce nomid; only affects e()-returns
+    if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table' `graph' `graph2'
     if "`categorical'"!="" {
@@ -1587,6 +1685,7 @@ program CDF, eclass
     eret local atx         "`atx'"
     eret local discrete    "`discrete'"
     eret local categorical "`categorical'"
+    eret local categorical "`alt'"
     eret local origin      "`origin'"
     if "`ogrid'"!="" {
         eret matrix ogrid  = `OGRID'
@@ -1598,9 +1697,10 @@ program MRP, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
-        NOBReak NOMID BALance(str) Over(varname numeric) ///
+        NOBReak NOMID DESCending BALance(str) Over(varname numeric) ///
         SCale SCale2(str) MULTiplicative LOGarithmic ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
+    if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table'
     if `"`scale2'"'!="" local scale scale
@@ -1687,9 +1787,10 @@ program SUM, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
-        NOBReak NOMID ADJust(str) BALance(str) Over(varname numeric) ///
+        NOBReak NOMID DESCending ADJust(str) BALance(str) Over(varname numeric) ///
         Statistics(passthru) Generate(name) Replace ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
+    if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table'
     Parse_adjust `adjust'
@@ -1816,6 +1917,44 @@ mata set matastrict on
 
 /* Helper functions directly called by ado ----------------------------------*/
 
+void Abbrev(`SS' nm, `SS' s, `Int' l, | `Bool' dots)
+{
+    `Int' l1
+    
+    if (l<=32) st_local(nm, abbrev(s, l))
+    else if (stataversion()>=1400) {
+        if (args()<4) st_local(nm, udsubstr(s, 1, l))
+        else {
+            l1 = udstrlen(s)
+            if (l1<=l) st_local(nm, s)
+            else       st_local(nm, udsubstr(s, 1, l-3)+"...")
+        }
+    }
+    else {
+        if (args()<4) st_local(nm, substr(s, 1, l))
+        else {
+            l1 = strlen(s)
+            if (l1<=l) st_local(nm, s)
+            else       st_local(nm, substr(s, 1, l-3)+"...")
+        }
+    }
+}
+
+void Strlen(`SS' nm, `SS' s, | `SS' s2)
+{
+    `Int' l, l2
+    
+    if (stataversion()>=1400) l = udstrlen(s)
+    else                      l = strlen(s)
+    if (args()<3) {
+        st_local(nm, strofreal(l))
+        return
+    }
+    if (stataversion()>=1400) l2 = udstrlen(s2)
+    else                      l2 = strlen(s2)
+    st_local(nm, strofreal(max((l,l2))))
+}
+
 void rd_check_mat(`SS' nm, `Int' kind)
 {
     `RM' m
@@ -1847,15 +1986,16 @@ void rd_Post_common_e()
     else {
         st_global("e(refvar)", st_local("refvar"))
     }
-    st_global("e(nobreak)",   st_local("nobreak"))
-    st_global("e(nomid)",     st_local("nomid"))
-    st_global("e(pooled)",    st_local("pooled"))
-    st_global("e(adjust)",    st_local("adj1"))
-    st_global("e(refadjust)", st_local("adj0"))
-    st_global("e(adjmean)",   st_local("adjmean"))
-    st_global("e(adjsd)",     st_local("adjsd"))
-    st_global("e(adjlog)",    st_local("adjlog"))
-    st_global("e(adjmult)",   st_local("adjmult"))
+    st_global("e(nobreak)",    st_local("nobreak"))
+    st_global("e(nomid)",      st_local("nomid"))
+    st_global("e(descending)", st_local("descending"))
+    st_global("e(pooled)",     st_local("pooled"))
+    st_global("e(adjust)",     st_local("adj1"))
+    st_global("e(refadjust)",  st_local("adj0"))
+    st_global("e(adjmean)",    st_local("adjmean"))
+    st_global("e(adjsd)",      st_local("adjsd"))
+    st_global("e(adjlog)",     st_local("adjlog"))
+    st_global("e(adjmult)",    st_local("adjmult"))
     if (st_local("over")!="") {
         st_global("e(over)", st_local("over"))
         st_global("e(over_namelist)", st_local("overlevels"))
@@ -1868,10 +2008,11 @@ void rd_Post_common_e()
         }
     }
     if (st_local("bal_varlist")!="") {
-        st_global("e(balance)",      st_local("bal_varlist"))
-        st_global("e(balmethod)",    st_local("bal_method"))
-        st_global("e(balref)",       st_local("bal_ref"))
-        st_global("e(balopts)",      st_local("bal_opts"))
+        st_global("e(balance)",    st_local("bal_varlist"))
+        st_global("e(balmethod)",  st_local("bal_method"))
+        st_global("e(balref)",     st_local("bal_ref"))
+        st_global("e(balcontrast)",st_local("bal_contrast"))
+        st_global("e(balopts)",    st_local("bal_opts"))
         stata("ereturn scalar Nout = " + st_local("bal_Nout"))
     }
     stata("ereturn scalar level = " + st_local("level"))
@@ -1987,7 +2128,8 @@ struct `DATA' {
     `Bool'  tbreak     // break ties
     `Bool'  mid        // use midpoints for relative ranks: 1 yes, 0 no 
     `Bool'  pooled     // use pooled reference distribution
-    `Int'   balanced   // balancing: 0 none, 1 comparison, 2 reference
+    `Int'   balanced   // balancing: 0 none, 1 comparison, 2 reference,
+                       //            3 comparison contrast, 4 ref contrast 
     `RC'    y1, w1, p1 // data and weights comparison distribution
     `RS'    N1         // N of comparison distribution
     `RC'    y0, w0, p0 // data and weights reference distribution
@@ -2024,15 +2166,22 @@ void rd_getdata(`Data' data)
     data.tbreak   = (st_local("nobreak")=="")
     data.mid      = (st_local("nomid")=="")
     data.method   = (st_local("atx")!="") + // => 1
-                    (st_local("atx2")!="" | st_local("ATX0")!="") + // => 2
+                    (st_local("atx")=="comparison" | 
+                     st_local("atx")=="reference" | 
+                     st_local("atx2")!="" | 
+                     st_local("ATX0")!="") + // => 2
                     3*(st_local("discrete")!="") // => add 3
     data.pooled   = (st_local("pooled")!="")
-    data.balanced = (st_local("bal_varlist")!="") + (st_local("bal_ref")!="")
+    data.balanced = (st_local("bal_varlist")!="") +  // => 1 
+                    (st_local("bal_ref")!="") +      // => 2
+                    2*(st_local("bal_contrast")!="") // => add 2 
     depvar        = st_varindex(st_local("depvar"))
     if (data.by) {
-        touse1 = st_varindex(st_local("touse1"))
-        if (data.pooled) touse0 = st_varindex(st_local("touse"))
-        else             touse0 = st_varindex(st_local("touse0"))
+        if (data.balanced==4) touse1 = st_varindex(st_local("touse0"))
+        else                  touse1 = st_varindex(st_local("touse1"))
+        if (data.balanced==3) touse0 = st_varindex(st_local("touse1"))
+        else if (data.pooled) touse0 = st_varindex(st_local("touse"))
+        else                  touse0 = st_varindex(st_local("touse0"))
         refvar = st_varindex(st_local("depvar"))
     }
     else {
@@ -2047,16 +2196,16 @@ void rd_getdata(`Data' data)
     
     // comparison group data
     data.y1 = st_data(., depvar, touse1)
-    if (data.balanced==1)      data.w1 = st_data(., st_local("bal_wvar"), touse1)
+    if (anyof((1,4),data.balanced)) data.w1 = st_data(., st_local("bal_wvar"), touse1)
     else if (data.wtype)       data.w1 = st_data(., st_local("wvar"), touse1)
-    else if (data.balanced==2) data.w1 = J(rows(data.y1),1,1)
+    else if (data.balanced)    data.w1 = J(rows(data.y1),1,1)
     else                       data.w1 = 1
     
     // reference group data
     data.y0 = st_data(., refvar, touse0)
-    if (data.balanced==2)      data.w0 = st_data(., st_local("bal_wvar"), touse0)
+    if (anyof((2,3),data.balanced)) data.w0 = st_data(., st_local("bal_wvar"), touse0)
     else if (data.wtype)       data.w0 = st_data(., st_local("wvar"), touse0)
-    else if (data.balanced==1) data.w0 = J(rows(data.y0),1,1)
+    else if (data.balanced)    data.w0 = J(rows(data.y0),1,1)
     else                       data.w0 = 1
     if (data.by==0 & data.pooled) {
         data.y0 = data.y0 \ data.y1
@@ -2084,7 +2233,8 @@ void rd_getdata(`Data' data)
     
     // sort data
     if (rows(data.w1)!=1) {
-        data.p1 = order((data.y1,data.w1), (1,2))
+        if (st_local("descending")!="") data.p1 = order((data.y1,data.w1), (1,-2))
+        else                            data.p1 = order((data.y1,data.w1), (1,2))
         data.y1 = data.y1[data.p1]
         data.w1 = data.w1[data.p1]
     }
@@ -2093,7 +2243,8 @@ void rd_getdata(`Data' data)
         data.y1 = data.y1[data.p1]
     }
     if (rows(data.w0)!=1) {
-        data.p0 = order((data.y0,data.w0), (1,2))
+        if (st_local("descending")!="") data.p0 = order((data.y0,data.w0), (1,-2))
+        else                            data.p0 = order((data.y0,data.w0), (1,2))
         data.y0 = data.y0[data.p0]
         data.w0 = data.w0[data.p0]
     }
@@ -2155,7 +2306,13 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `PSRC' P, `RC' y, `RC' w, `RC' p,
     }
     l  = (mean ? mean(y, w)   : _rd_median(y, w))
     l0 = (mean ? mean(y0, w0) : _rd_median(y0, w0))
-    if (link==2) return(&(y * (l0 / l))) // multiplicative (scale not relevant)
+    if (link==2) {                       // multiplicative (scale not relevant)
+        if ((l0/l)<=0 | (l0/l)>=.) {
+            display("{err}invalid location adjustment factor; data not suitable for multiplicative adjustment")
+            exit(499)
+        }
+        return(&(y * (l0 / l)))
+    }
     s  = (sd ? sqrt(variance(y, w))   : _rd_iqrange(y, w))
     s0 = (sd ? sqrt(variance(y0, w0)) : _rd_iqrange(y0, w0))
     return(&((y :- l) * (s0 / s) :+ l0)) // additive
@@ -2174,7 +2331,13 @@ void _rd_adjust(`PSRC' Y, `PSRC' W, `PSRC' P, `RC' y, `RC' w, `RC' p,
     }
     l  = (mean ? mean(y, w)   : _rd_median(y, w))
     l0 = (mean ? mean(y0, w0) : _rd_median(y0, w0))
-    if (link==2) return(&(y * (l0 / l))) // multiplicative
+    if (link==2) {                       // multiplicative
+        if ((l0/l)<=0 | (l0/l)>=.) {
+            display("{err}invalid location adjustment factor; data not suitable for multiplicative adjustment")
+            exit(499)
+        }
+        return(&(y * (l0 / l)))
+    }
     return(&(y :+ (l0 - l)))             // additive
 }
 
@@ -2202,12 +2365,13 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
 {
     // grid based on outcome values
     if (mod(data.method,3)==1) {
-        atx = _rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1))
+        atx = _rd_get_atx(data, "atx")
         at = _rd_relrank(*data.Y0, *data.W0, atx, ., 0, 0)
     }
     else if (mod(data.method,3)==2) {
-        if (st_local("ATX0")!="") atx = _rd_get_at_mat("ATX0")
-        else                      atx = strtoreal(tokens(st_local("atx2")))'
+        if      (st_local("atx")!="atx") atx = _rd_get_atx(data, st_local("atx"))
+        else if (st_local("ATX0")!="")   atx = _rd_get_at_mat("ATX0")
+        else                             atx = strtoreal(tokens(st_local("atx2")))'
         at = _rd_relrank(*data.Y0, *data.W0, atx, ., 0, 0)
     }
     // grid based on probabilities
@@ -2230,11 +2394,17 @@ void rd_get_at(`Data' data, `RC' at, `RC' atx, `Int' n)
         st_local("n", strofreal(n, "%18.0g"))
     }
     // check whether n is too large
-    rd_get_at_check_n(n)
-    
+    _rd_get_at_check_n(n)
 }
 
-void rd_get_at_check_n(`Int' n0)
+`RC' _rd_get_atx(`Data' data, `SS' atx)
+{
+    if (atx=="comparison") return(_rd_uniq(*data.Y1))
+    if (atx=="reference")  return(_rd_uniq(*data.Y0))
+    return(_rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1)))
+}
+
+void _rd_get_at_check_n(`Int' n0)
 {
     `Int' n, nhist
     
@@ -2739,8 +2909,11 @@ void rd_CDF(`Int' n)
     rd_get_at(data, at, atx, n)
     
     // estimate
-    if (mod(data.method,3)) b = _rd_relrank(*data.Y1, *data.W1, atx, ., 0, 0)
-    else                    b = _rd_CDF_ipolate(data, at)
+    if (st_local("alt")!="")    b = _rd_CDF_alt(data, at)
+    else {
+        if (mod(data.method,3)) b = _rd_relrank(*data.Y1, *data.W1, atx, ., 0, 0)
+        else                    b = _rd_CDF_ipolate(data, at)
+    }
     
     // return results
     if (data.method) {
@@ -2770,9 +2943,46 @@ void rd_CDF(`Int' n)
     rd_ogrid(data, 1)
 }
 
-`RC' _rd_CDF_ipolate(`Data' data, `RC' at)
+`RC' _rd_CDF_alt(`Data' data, `RC' at)
 {
     `Int' i, j
+    `RS'  ati
+    `RC'  r, cdf, b
+    pragma unset r
+    
+    // compute cdf of relative ranks
+    rd_relrank(data)
+    cdf = _rd_relrank_cdf(data.ranks, *data.W1, r)
+    
+    // pad r and cdf if r does not include 0 or 1
+    if (r[1]>0) {
+        cdf = 0 \ cdf
+        r   = 0 \ r
+    }
+    if (r[rows(r)]<1) {
+        cdf = cdf \ 1
+        r   = r   \ 1
+    }
+    
+    // interpolate (note: r is unique)
+    j = rows(r)
+    i = rows(at)
+    b = J(i,1,.)
+    for (; i; i--) {
+        ati = at[i]
+        for (; j; j--) {
+            if (r[j]<=ati) break
+        }
+        if (r[j]==ati) b[i] = cdf[j]
+        else           b[i] = cdf[j] + (cdf[j+1]-cdf[j]) * (ati-r[j])/(r[j+1]-r[j])
+    }
+    return(b)
+}
+
+`RC' _rd_CDF_ipolate(`Data' data, `RC' at)
+{
+    `Int' i, j, k
+    `RS'  ati
     `RC'  x, cdf0, cdf1, b
     
     // obtain exact cdf
@@ -2780,22 +2990,43 @@ void rd_CDF(`Int' n)
     cdf1 = 0 \ _rd_relrank(*data.Y1, *data.W1, x, ., 0, 0)
     cdf0 = 0 \ _rd_relrank(*data.Y0, *data.W0, x, ., 0, 0)
     
-    // move to point where cdf0 first reaches 1
-    for (j = rows(cdf0); j; j--) {
-        if (cdf0[j]<1) break
-    }
-    j++
-    
     // interpolate
+    j = rows(cdf0)
     i = rows(at)
     b = J(i,1,.)
     for (; i; i--) {
+        ati = at[i]
         for (; j; j--) {
-            if (cdf0[j]<=at[i]) break
+            if (cdf0[j]<=ati) break
         }
-        if (cdf0[j]==at[i]) b[i] = cdf1[j]
-        else b[i] = cdf1[j] + (cdf1[j+1]-cdf1[j]) * 
-                   (at[i]-cdf0[j]) / (cdf0[j+1] - cdf0[j])
+        // if requested r hits a point in cdf0
+        if (cdf0[j]==ati) {
+            // case 1: r = 0
+            //  => use ceiling of possible upright segment at origin
+            if (ati==0) {
+                b[i] = cdf1[j]
+                continue
+            }
+            // check for upright segment
+            for (k = j-1; k; k--) {
+                if (cdf0[k]<ati) break
+            }
+            // case 2: no upright segment
+            if ((++k)==j) {
+                b[i] = cdf1[j]
+                continue
+            }
+            // case 3: upright segment at r < 1
+            //  => get midpoint of upright segment
+            if (ati<1) b[i] = (cdf1[k] + cdf1[j])/2
+            // case 4: upright segment at r = 0
+            //  => use floor of upright segment
+            else b[i] = cdf1[k]
+            j = k
+            continue
+        }
+        // if requested r is between two points of cdf0: interpolate
+        b[i] = cdf1[j] + (cdf1[j+1]-cdf1[j]) * (ati-cdf0[j])/(cdf0[j+1]-cdf0[j])
     }
     return(b)
 }
@@ -2841,22 +3072,27 @@ void rd_SUM()
     // return results
     if (data.by) {
         if (data.adj1.shape) {
-            if (data.pooled) touse = st_varindex(st_local("touse"))
-            else             touse = st_varindex(st_local("touse0")) 
+            if (data.balanced==3) touse = st_varindex(st_local("touse1"))
+            else if (data.pooled) touse = st_varindex(st_local("touse"))
+            else                  touse = st_varindex(st_local("touse0")) 
         }
-        else touse = st_varindex(st_local("touse1"))
+        else {
+            if (data.balanced==4) touse = st_varindex(st_local("touse0"))
+            else                  touse = st_varindex(st_local("touse1"))
+        } 
     }
     else touse = st_varindex(st_local("touse"))
     st_store(., st_local("ranks"), touse, data.ranks[invorder(*data.P1)])
-    if (data.balanced) st_store(., st_local("WVAR"), touse, *data.W1[invorder(*data.P1)])
+    if (data.balanced) st_store(., st_local("WVAR"), touse, (*data.W1)[invorder(*data.P1)])
 }
 
 /* Helper functions ---------------------------------------------------------*/
 
 // return unique values of X
 // - X assumed sorted and nonmissing
-`RC' _rd_uniq(`RC' X)  
+`RC' _rd_uniq(`RC' X)
 {
+    if (rows(X)<=1) return(X)
     return(select(X, X:!=(X[|2\.|]\.)))
 }
 
@@ -2890,6 +3126,7 @@ void rd_SUM()
     
     n = rows(X)
     if (n==0) return(J(rows(P),1,.))
+    if (n==1) return(J(rows(P),1,X))
     j = ceil(P * n)
     _editvalue(j, 0, 1) // use minimum if P = 0
     return(X[j])
@@ -2902,6 +3139,7 @@ void rd_SUM()
     
     n = rows(X)
     if (n==0) return(J(rows(P),1,.))
+    if (n==1) return(J(rows(P),1,X))
     g = P * n
     j = floor(g)
     g = 0.5 :+ 0.5*((g - j):>0)
@@ -2919,6 +3157,7 @@ void rd_SUM()
     
     n = rows(X)
     if (n==0) return(J(rows(P0),1,.))
+    if (n==1) return(J(rows(P0),1,X))
     W = quadrunningsum(w)
     P = P0 * W[n]
     r = rows(P)
@@ -2942,6 +3181,7 @@ void rd_SUM()
     
     n = rows(X)
     if (n==0) return(J(rows(P0),1,.))
+    if (n==1) return(J(rows(P0),1,X))
     W = quadrunningsum(w)
     P = P0 * W[n]
     r = rows(P)
@@ -3175,7 +3415,7 @@ void rd_SUM()
 {
     `Int'  i, j, k
     `RS'   xi, W
-    `RC'   r, step, ww, wstep
+    `RC'   r, step, ww
     
     i = rows(x)
     r = J(i, 1, 0)
@@ -3198,11 +3438,11 @@ void rd_SUM()
                 ww = runningsum(w[|k\i|])
                 W  = ww[rows(ww)]
                 if (W==0) {
+                    // if all observations have zero weight
                     r[|k\i|] = cdf[j] :- step[j] :* ((i+.5):-(k::i)) / (i-k+1)
                 }
                 else {
-                    wstep = ww - (0 \ ww[|1\rows(ww)-1|])
-                    ww = ww - 0.5 * wstep
+                    ww = ww - 0.5 * w[|k\i|]
                     r[|k\i|] = cdf[j] :- step[j] :* (W:-ww) / W
                 }
                 i = k
