@@ -1,5 +1,5 @@
 {smcl}
-{* 11jun2020}{...}
+{* 12jun2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -234,13 +234,13 @@ help for {hi:reldist}
     {p_end}
 
 {syntab:Outcome labels}
-{synopt:[{cmd:y}]{cmdab:olab:el(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome labels
+{synopt:[{cmd:y}]{cmdab:olab:el}[{cmd:(}{help reldist##olabel:{it:spec}}{cmd:)}]}add outcome labels
     on secondary axis
     {p_end}
-{synopt:[{cmd:y}]{cmdab:otic:k(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome ticks
+{synopt:[{cmd:y}]{cmdab:otic:k(}{help reldist##otick:{it:spec}}{cmd:)}}add outcome ticks
     on secondary axis
     {p_end}
-{synopt:[{cmd:y}]{cmdab:oli:ne(}{help reldist##olabel:{it:spec}}{cmd:)}}add outcome lines
+{synopt:[{cmd:y}]{cmdab:oli:ne(}{help reldist##oline:{it:spec}}{cmd:)}}add outcome lines
     on secondary axis
     {p_end}
 {synopt:[{cmd:y}]{cmdab:oti:tle(}{help title_options:{it:tinfo}}{cmd:)}}title for outcome scale axis
@@ -879,46 +879,60 @@ help for {hi:reldist}
 {phang}
     {opt noci} omits the confidence intervals.
 
-{marker olabel}{...}
 {dlgtab:Outcome labels}
 
+{marker olabel}{...}
 {phang}
-    [{cmd:y}]{opt olabel(spec)} adds outcome labels on a secondary
-    axis. The syntax of {it:spec} is
+    [{cmd:y}]{cmd:olabel}[{cmd:(}{it:spec}{cmd:)}] adds outcome labels on a secondary
+    axis. {cmd:olabel()} adds outcome labels for the reference distribution; {cmd:yolabel()}
+    adds outcome labels for the comparison distribution (only allowed after
+    {cmd:reldist cdf}). The syntax of {it:spec} is
+
+            [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,} {it:suboptions} ]
+
+{pmore}
+    {cmd:#}{it:#} requests that (approximately) {it:#} outcome labels be
+    added at (approximately) evenly-spaced positions; the default is
+    {cmd:#}6. Alternatively, specify {it:numlist} to generate labels for
+    given outcome values. {it:suboptions} are as described in help
+    {it:{help axis_label_options}}.
+
+{pmore}
+    Option [{cmd:y}]{cmd:olabel()} may be repeated. Use suboptions {cmd:add}
+    and {cmd:custom} to generate multiple sets of labels
+    with different rendering; see {it:{help axis_label_options}}.
+
+{marker otick}{...}
+{phang}
+    [{cmd:y}]{opt otick(spec)} adds outcome ticks on a secondary axis.
+    {cmd:otick()} adds outcome ticks for the reference distribution;
+    {cmd:yotick()} adds outcome ticks for the comparison distribution (only
+    allowed after {cmd:reldist cdf}). The syntax of {it:spec} is
 
             {it:{help numlist}} [{cmd:,} {it:suboptions} ]
 
 {pmore}
-    where {it:suboptions} are as described in help
-    {it:{help axis_label_options}}. Depending on context, the positions of
-    the outcome labels are obtained form the quantiles stored
-    in {cmd:e(ogrid)} or from the values stored in
-    {cmd:e(at)}.
+    where {it:numlist} specifies the outcome values for which ticks be generated
+    and {it:suboptions} are as described in help
+    {it:{help axis_label_options}}. Option [{cmd:y}]{cmd:otick()} may be
+    repeated. Use suboptions {cmd:add} and {cmd:custom} to generate multiple
+    sets of ticks with different rendering; see {it:{help axis_label_options}}.
 
-{pmore}
-    {cmd:olabel()} adds outcome labels for the reference distribution; {cmd:yolabel()}
-    adds outcome labels for the comparison distribution (only allowed after
-    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:olabel()} may be specified multiple times.
-
-{phang}
-    [{cmd:y}]{opt otick(spec)} adds outcome ticks on a secondary axis. Syntax
-    and computation is as for {cmd:olabel()}. {cmd:otick()} adds
-    outcome ticks for the reference distribution; {cmd:yotick()} adds outcome
-    ticks for the comparison distribution (only allowed after
-    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:otick()} may be specified multiple times.
-
+{marker oline}{...}
 {phang}
     [{cmd:y}]{opt oline(spec)} draws added lines at the positions of
-    the specified outcome values on a secondary axis. The syntax of {it:spec} is
+    the specified outcome values on a secondary axis. {cmd:oline()} adds
+    outcome lines for the reference distribution; {cmd:yoline()} adds outcome
+    lines for the comparison distribution (only allowed after
+    {cmd:reldist cdf}). The syntax of {it:spec} is
 
             {it:{help numlist}} [{cmd:,} {it:suboptions} ]
 
 {pmore}
-    where {it:suboptions} are as described in help
-    {it:{help added_line_options}}. {cmd:oline()} adds
-    outcome lines for the reference distribution; {cmd:yoline()} adds outcome
-    lines for the comparison distribution (only allowed after
-    {cmd:reldist cdf}). Option [{cmd:y}]{cmd:oline()} may be specified multiple times.
+    where {it:numlist} specifies the outcome values for which added lines be generated
+    and {it:suboptions} are as described in help
+    {it:{help added_line_options}}. Option [{cmd:y}]{cmd:oline()} may be repeated
+    to draw multiple sets of lines with different rendering.
 
 {phang}
     [{cmd:y}]{opt otitle(tinfo)} provides a title for the outcome scale
@@ -927,18 +941,22 @@ help for {hi:reldist}
     allowed after {cmd:reldist cdf}).
 
 {pstd}
-    Technical note: There is an undocumented command called {cmd:reldist olabel} that can be
-    used to compute label positions after the relative distribution has been
+    Technical note: The positions of the outcome labels, ticks, or lines are
+    computed from the information stored by {cmd:reldist} in {cmd:e()}, either
+    from the quantiles stored in {cmd:e(ogrid)} or from the values stored
+    in {cmd:e(at)}, depending on context. There is an undocumented command
+    called {cmd:reldist olabel} that can be
+    used to compute the positions after the relative distribution has been
     estimated. Use this command, for example, if you want to draw a custom
     graph from the stored results without applying {cmd:reldist graph}. The
     syntax is as follows:
 
 {p 8 17 2}
-    {cmd:reldist} {opt olab:el} [{it:{help numlist}}] [{cmd:,}
+    {cmd:reldist} {opt olab:el} [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,}
         {opth for:mat(%fmt)} {opth tic:k(numlist)} {opth li:ne(numlist)} {opt y} ]
 
 {pstd}
-    where {it:numlist} specifies values for which labels be generated,
+    where {cmd:#}{it:#} or {it:numlist} specifies the (number of) values for which labels be generated,
     {cmd:format()} specifies the display format for the labels, {cmd:tick()}
     specifies values for which ticks be generated, {cmd:line()}
     specifies values for which added lines be generated, and {cmd:y} request outcome labels
@@ -985,11 +1003,18 @@ help for {hi:reldist}
 
 {pstd}
     To get an idea of the hourly wages that correspond to different positions in
-    the reference distribution, we can add some outcome labels using the {cmd:olabel()}
+    the reference distribution, we can add outcome labels using the {cmd:olabel}
     option:
 
 {p 8 12 2}
-        . {stata reldist graph, olabel(2(1)8 10 12 20) otitle(hourly wage)}
+        . {stata reldist graph, olabel otitle(hourly wage)}
+
+{pstd}
+    We can also provide a list of custom values for which outcome labels be
+    generated. Furthermore, we can add ticks using option {cmd:otick()}:
+
+{p 8 12 2}
+        . {stata reldist graph, olabel(1 3(1)12 15 40) otick(1(1)40) otitle(hourly wage)}
 
 {pstd}
     To include a histogram in addition to the density curve, type:

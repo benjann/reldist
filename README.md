@@ -35,6 +35,12 @@ Installation from GitHub:
 
 Main changes:
 
+    12jun2020 (version 1.1.7):
+    - [y]olabel() now allows argument #n to generate n labels at evenly spaced 
+      (approximately) positions from min to max; [y]olabel without is equivalent
+      to [y]olabel(#6); less than n labels may be produced if there is heaping
+      in the data
+    
     11jun2020 (version 1.1.6):
     - options atx(reference) and atx(comparison) added
     - new option balance(, contrast): compare unbalanced with balanced distribution

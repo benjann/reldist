@@ -1,4 +1,4 @@
-*! version 1.1.6  11jun2020  Ben Jann
+*! version 1.1.7  12jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -472,12 +472,10 @@ program _GRAPH_olab // returns [y]oaxis, [y]olabopts, options
     local options: copy local options0
     // olabel(), otick(), oline() (repeated options allowed)
     local olabopts
-    local hasolab 0
     local 0 `", `options'"'
     while (1) {
         __GRAPH_olab `xy' `0'
         if (`"`oopts'"'=="") continue, break
-        if "`olabok'"!="" local hasolab 1
         local olabopts `olabopts' `oopts'
         local 0 `", `options'"'
     }
@@ -485,31 +483,36 @@ program _GRAPH_olab // returns [y]oaxis, [y]olabopts, options
     c_local options `options'
     if (`"`olabopts'`otitle'"'=="") exit
     if `"`otitle'"'=="" local otitle `xy0'title("", axis(2))
-    local olabopts `olabopts' `otitle'
-    if `hasolab'==0 {
-        // suppress default labels
-        local olabopts `xy0'label(none, axis(2)) `olabopts'
-    }
-    c_local `xy'olabopts `olabopts'
+    c_local `xy'olabopts `xy0'label(none, axis(2)) `olabopts' `otitle'
+        // xlabel(none) is specified so that no automatic default labels are
+        // generated; this is needed because olabopts may not contain an xlabel()
+        // option or only an xlabel(, add) option
     c_local `xy'oaxis `xy0'axis(1 2) // add to each plot so that axes do not move
 end
 
-program __GRAPH_olab // returns oopts, olabok and options
+program __GRAPH_olab // returns oopts and options
     _parse comma xy 0 : 0
     local XY = strupper("`xy'")
-    syntax [, `XY'OLABel(str asis) `XY'OTICk(str asis) `XY'OLIne(str asis) * ]
+    syntax [, `XY'OLABel `XY'OLABel2(str asis) `XY'OTICk(str asis) `XY'OLIne(str asis) * ]
     if "`xy'"=="y" {
-        local olabel `"`yolabel'"'
-        local otick  `"`yotick'"'
-        local oline  `"`yoline'"'
+        local olabel  `"`yolabel'"'
+        local olabel2 `"`yolabel2'"'
+        local otick   `"`yotick'"'
+        local oline   `"`yoline'"'
+    }
+    if `"`olabel'"'!="" & `"`olabel2'"'!="" {
+        local options `xy'olabel(`olabel2') `options'
+        local olabel2
     }
     c_local oopts // reset
     c_local options `options'
     // olabel
+    if `"`olabel2'"'!="" local olabel olabel
     if `"`olabel'"'!="" {
-        local 0 `"`olabel'"'
+        local 0 `"`olabel2'"'
         syntax [anything] [, FORmat(passthru) * ]
         local olabel `"`anything'"'
+        if `"`olabel'"'=="" local olabel "#6"
         local olabopts `"`options'"'
     }
     // otick
@@ -536,7 +539,7 @@ program __GRAPH_olab // returns oopts, olabok and options
             exit
         }
     }
-    OLABEL `"`olabel'"', tick(`"`otick'"') line(`"`oline'"') `format' `xy'
+    OLABEL `olabel', tick(`otick') line(`oline') `format' `xy'
     local olabel `"`r(label)'"'
     local otick  `"`r(tick)'"'
     local oline  `"`r(line)'"'
@@ -544,7 +547,6 @@ program __GRAPH_olab // returns oopts, olabok and options
     if "`xy'"=="" local xy x
     if `"`olabel'"'!="" {
         local oopts `xy'label(`olabel', axis(2) `olabopts')
-        local olabok "ok"
     }
     if `"`otick'"'!="" {
         local oopts `oopts' `xy'tick(`otick', axis(2) `otickopts')
@@ -553,7 +555,6 @@ program __GRAPH_olab // returns oopts, olabok and options
         local oopts `oopts' `xy'line(`oline', axis(2) `olineopts') 
     }
     c_local oopts `oopts'
-    c_local olabok `olabok'
 end
 
 program _GRAPH_xyti // return xti, yti
@@ -828,19 +829,27 @@ program OLABEL, rclass
     }
     _parse comma lhs 0 : 0
     syntax [, TICk(numlist sort) LIne(numlist sort) FORmat(str) y ]
+    local tick_x `"`tick'"'
+    local line_x `"`line'"'
     if "`y'"!="" {
         if `"`e(subcmd)'"'!="cdf" {
             di as err "option {bf:y} only allowed after {bf:reldist cdf}"
             exit 499
         }
     }
-    return local tick_x `"`tick'"'
-    return local line_x `"`line'"'
     if `"`format'"'=="" local format "%6.0g"
     confirm format `format'
-    local 0 `", label(`lhs')"'
-    syntax [, LABel(numlist sort) ]
-    return local label_x `"`label'"'
+    if (substr(`"`lhs'"',1,1)=="#") {
+        local label = substr(`"`lhs'"',2,.)
+        local 0 `", label(`label')"'
+        syntax [, LABel(numlist int >=2 max=1) ]
+        local label "#`label'"
+    }
+    else {
+        local 0 `", label(`lhs')"'
+        syntax [, LABel(numlist sort) ]
+        local label_x `"`label'"'
+    }
     if `"`label'`tick'`line'"'=="" exit // nothing to do
     local atx = (`"`e(atx)'"'!="")
     if (`atx'==0) {
@@ -862,9 +871,12 @@ program OLABEL, rclass
     mata: rd_olab("`y'"!="", `atx', "label", "`format'")
     mata: rd_olab("`y'"!="", `atx', "tick", "")
     mata: rd_olab("`y'"!="", `atx', "line", "")
-    return local label `"`label'"'
-    return local tick  `"`tick'"'
-    return local line  `"`line'"'
+    return local label   `"`label'"'
+    return local label_x `"`label_x'"'
+    return local tick    `"`tick'"'
+    return local tick_x  `"`tick_x'"'
+    return local line    `"`line'"'
+    return local line_x  `"`line_x'"'
 end
 
 program Parse_syntax    // preprocess syntax: two-sample vs. paired
@@ -2058,11 +2070,6 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
     `RR' y, x
     `RC' p
     
-    x  = strtoreal(tokens(st_local(nm)))
-    if (length(x)==0) {
-        st_local(nm,"")
-        return
-    }
     if (atx) {
         y = st_matrix("e(at)")[2,]
         if (cdf) p = st_matrix("e(b)")
@@ -2070,7 +2077,19 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
     }
     else {
         y = st_matrix("e(ogrid)")[1+cdf,]
-        p = (0::length(y)-1) / (length(y)-1)
+        p = (0..length(y)-1) / (length(y)-1)
+    }
+    if (substr(st_local(nm),1,1)=="#") {
+        x = strtoreal(substr(st_local(nm),2,.))
+        x = _rd_uniq(_rd_quantile(y', (p-(0,p[|1\length(p)-1|]))', (0::x-1)/(x-1), 1))'
+        st_local(nm+"_x", invtokens(strofreal(x)))
+    }
+    else {
+        x  = strtoreal(tokens(st_local(nm)))
+        if (length(x)==0) {
+            st_local(nm,"")
+            return
+        }
     }
     st_local(nm, _rd_olab_fmt(_rd_olab_pos(y, p, x), x, fmt))
 }
