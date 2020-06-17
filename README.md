@@ -35,6 +35,20 @@ Installation from GitHub:
 
 Main changes:
 
+    17jun2020 (version 1.1.8):
+    - [y]obael() now prunes labels that are too close together; new suboptions 
+      -noprune- and -prune()- affect this behavior
+    - -reldist pdf/hist- now have option -cross()-
+    - -reldist hist- now also computes divergence measures (based on histogram density)
+    - -reldist pdf- now computes divergence measures based on output grid (not 
+      the internal approximation grid); divergence measures are now also reported
+      if option -exact- is specified
+    - -reldist pdf- now also computes the dissimilarity index (total variation 
+      distance); e(divergence) renamed to e(entropy)
+    - -reldist pdf-: napprox() was set to max(512, n()+1) instead of max(512, n())
+      if not specified; this is fixed
+    - -reldist mrp- now option -reference-
+
     12jun2020 (version 1.1.7):
     - [y]olabel() now allows argument #n to generate n labels at evenly spaced 
       (approximately) positions from min to max; [y]olabel without is equivalent

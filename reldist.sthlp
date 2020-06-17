@@ -1,5 +1,5 @@
 {smcl}
-{* 12jun2020}{...}
+{* 17jun2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -99,6 +99,8 @@ help for {hi:reldist}
     {p_end}
 {synopt:{help reldist##density_opts:{it:density_options}}}density estimation options
     {p_end}
+{synopt:{opt cross(matname)}}compute cross-entropy divergence using {it:matname}
+    {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
 {synopt:{opt ogrid(#)} | {opt noogrid}}set size of outcome label approximation grid
@@ -106,6 +108,8 @@ help for {hi:reldist}
 
 {syntab:{help reldist##histopts:Subcommand {bf:histogram}}}
 {synopt:{opt n(#)}}number of histogram bins; default is {cmd:n(10)}
+    {p_end}
+{synopt:{opt cross(matname)}}compute cross-entropy divergence using {it:matname}
     {p_end}
 {synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
@@ -137,7 +141,9 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt log:arithmic}}use logarithmic (instead of linear) adjustment
     {p_end}
-{synopt:{opt sc:ale}[{cmd:(sd)}]}adjust scale between groups
+{synopt:{opt sc:ale}[{cmd:(sd)}]}adjust scale between distributions
+    {p_end}
+{synopt:{opt ref:erence}}adjust the reference distribution
     {p_end}
 
 {syntab:{help reldist##sumopts:Subcommand {bf:summarize}}}
@@ -576,6 +582,15 @@ help for {hi:reldist}
     divergence will not be computed if {cmd:exact} is specified.
 
 {phang}
+    {opt cross(matname)} requests that the PDF stored in matrix {it:matname} be
+    used to compute a cross-entropy divergence instead of the regular
+    divergence. Results will only be valid if the PDF in {it:matname} has been
+    obtained for the same evaluation points (on the 0/1 scale) as the current
+    density estimate; it is the user's responsibility to ensure that this is
+    the case. Option {cmd:cross()} is not allowed together with {cmd:categorical} or
+    {cmd:discrete}.
+
+{phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
     displays the results in a graph. The coefficients table will be suppressed
     in this case (unless option {cmd:table} is specified). Alternatively, use
@@ -600,6 +615,12 @@ help for {hi:reldist}
     {opt n(#)} specifies the number of histogram bars. The reference distribution
     will be divided into {it:#} bins of equal width. That is, each bin will
     cover 1/{it:#}th of the reference distribution. The default is {cmd:n(10)}.
+
+{phang}
+    {opt cross(matname)} requests that the histogram PDF stored in matrix {it:matname} be
+    used to compute a cross-entropy divergence instead of the regular
+    divergence. The histogram in {it:matname} must have the same number of bins
+    as the current histogram.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -717,6 +738,11 @@ help for {hi:reldist}
     reference group/variable. Specify
     {cmd:scale(sd)} to use the standard deviation instead of the IQR. {cmd:scale}
     is not allowed if {cmd:multiplicative} is specified.
+
+{phang}
+    {opt reference} causes the reference distribution to be adjusted. The default
+    is to adjust the comparison distribution. {cmd:reference} should only have an
+    effect on the results if option {cmd:logarithmic} has been specified.
 
 {marker sumopts}{...}
 {dlgtab:For subcommand -summarize-}
@@ -888,14 +914,33 @@ help for {hi:reldist}
     adds outcome labels for the comparison distribution (only allowed after
     {cmd:reldist cdf}). The syntax of {it:spec} is
 
-            [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,} {it:suboptions} ]
+{p 12 17 2}
+        [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,} {c -(}{cmd:noprune}|{opt prune(mindist)}{c )-}
+        {opth for:mat(%fmt)} {it:suboptions} ]
 
-{pmore}
+{phang2}
     {cmd:#}{it:#} requests that (approximately) {it:#} outcome labels be
     added at (approximately) evenly-spaced positions; the default is
     {cmd:#}6. Alternatively, specify {it:numlist} to generate labels for
-    given outcome values. {it:suboptions} are as described in help
-    {it:{help axis_label_options}}.
+    given outcome values.
+
+{phang2}
+    {opt prune(mindist)} requests that an outcome label (but not its tick) is to
+    be omitted if its distance to the preceding label is less than {it:mindist}
+    (an exception are labels that have the same position;
+    in such a case the largest label will be printed). The default is
+    {cmd:prune(0.1)}; type {cmd:prune(0)} or {cmd:noprune} to print labels at
+    all positions. The difference between {cmd:prune(0)} and {cmd:noprune} is
+    that {cmd:prune(0)} will only print one label per position whereas
+    {cmd:noprune} prints all labels, including labels that have the same
+    position.
+
+{phang2}
+    {opt format(%fmt)} specified the display format for the outcome labels. Default
+    is {cmd:format(%6.0g)}. See help {helpb format} for available formats.
+
+{phang2}
+    {it:suboptions} are as described in help {it:{help axis_label_options}}.
 
 {pmore}
     Option [{cmd:y}]{cmd:olabel()} may be repeated. Use suboptions {cmd:add}
@@ -953,11 +998,13 @@ help for {hi:reldist}
 
 {p 8 17 2}
     {cmd:reldist} {opt olab:el} [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,}
-        {opth for:mat(%fmt)} {opth tic:k(numlist)} {opth li:ne(numlist)} {opt y} ]
+        {opth for:mat(%fmt)} {c -(}{cmd:noprune}|{opt prune(cutoff)}{c )-}
+        {opth tic:k(numlist)} {opth li:ne(numlist)} {opt y} ]
 
 {pstd}
     where {cmd:#}{it:#} or {it:numlist} specifies the (number of) values for which labels be generated,
-    {cmd:format()} specifies the display format for the labels, {cmd:tick()}
+    {cmd:format()} specifies the display format for the labels, {cmd:prune()} determines the
+    pruning (see above), {cmd:tick()}
     specifies values for which ticks be generated, {cmd:line()}
     specifies values for which added lines be generated, and {cmd:y} request outcome labels
     for the Y axis of the relative CDF (only allowed after
@@ -1011,16 +1058,25 @@ help for {hi:reldist}
 
 {pstd}
     We can also provide a list of custom values for which outcome labels be
-    generated. Furthermore, we can add ticks using option {cmd:otick()}:
+    generated:
 
 {p 8 12 2}
-        . {stata reldist graph, olabel(1 3(1)12 15 40) otick(1(1)40) otitle(hourly wage)}
+        . {stata reldist graph, olabel(1(1)40) otitle(hourly wage)}
+
+{pstd}
+    By default, labels that are close together will not be printed. Type
+    {cmd:olabel(1(1)40, noprune)} print all 40 labels. Alternatively use suboption
+    {cmd:prune()} to set the minimum distance between labels
+    (default {cmd:prune(0.1)}). Example:
+
+{p 8 12 2}
+        . {stata reldist graph, olabel(1(1)40, prune(0.04)) otitle(hourly wage)}
 
 {pstd}
     To include a histogram in addition to the density curve, type:
 
 {p 8 12 2}
-        . {stata reldist pdf wage, by(union) histogram}
+        . {stata reldist pdf wage, by(union) histogram notable}
         {p_end}
 {p 8 12 2}
         . {stata reldist graph, ciopts(recast(rline) lp(dash) pstyle(p1))}
@@ -1069,7 +1125,8 @@ help for {hi:reldist}
     The cumulative relative distribution can be graphed as follows:
 
         . {stata sysuse nlsw88, clear}
-        . {stata reldist cdf wage, by(union) graph}
+{p 8 12 2}
+        . {stata reldist cdf wage, by(union) graph(olab(1(1)40) yolab(1(1)40) aspectratio(1))}
 
 {pstd}
     After applying a multiplicative location shift, the relative distribution
@@ -1254,18 +1311,23 @@ help for {hi:reldist}
     Handcock and Morris (1999). The relative density is estimated by
     kernel density methods; see
     {browse "http://boris.unibe.ch/69421/2/kdens.pdf":Jann (2007)}. The statistics
-    labeled "Divergence" and "Chi-squared" in the output of
-    {cmd:reldist pdf} are estimates of the Kullback-Leibler divergence defined as
+    labeled "Divergence", "Chi-squared", and "Dissimilarity" in the output of
+    {cmd:reldist pdf} are estimates of the Kullback-Leibler divergence
 
-        {it:D} = int_0^1 {it:p}({it:r}) ln({it:p}({it:r})) d{it:r}
-
-{pstd}
-    and the Chi-squared divergence defined as
-
-        {it:Chi2} = int_0^1 ({it:p}({it:r}) - 1)^2 d{it:r}
+        {it:D} = int_0^1 {it:g}({it:r}) ln({it:g}({it:r})) d{it:r}
 
 {pstd}
-    where where {it:p}({it:r}) is the relative density.
+    the Chi-squared divergence
+
+        {it:Chi2} = int_0^1 ({it:g}({it:r}) - 1)^2 d{it:r}
+
+{pstd}
+    and the dissimilarity index (total variation distance)
+
+        {it:T} = int_0^1 |{it:g}({it:r}) - 1|/2 d{it:r}
+
+{pstd}
+    where where {it:g}({it:r}) is the relative density.
 
 
 {marker saved_results}{...}
@@ -1288,8 +1350,9 @@ help for {hi:reldist}
 {synopt:{cmd:e(bwadjust)}}bandwidth adjustment factor ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(adaptive)}}number of iterations of adaptive estimator ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(napprox)}}size of approximation grid ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(divergence)}}value of Kullback-Leibler divergence ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(chi2)}}value of Chi-squared divergence ({cmd:pdf} only){p_end}
+{synopt:{cmd:e(entropy)}}value of Kullback-Leibler divergence ({cmd:pdf} and {cmd:histogram} only){p_end}
+{synopt:{cmd:e(chi2)}}value of Chi-squared divergence ({cmd:pdf} and {cmd:histogram} only){p_end}
+{synopt:{cmd:e(dissim)}}value of dissimilarity index ({cmd:pdf} and {cmd:histogram} only){p_end}
 {synopt:{cmd:e(n_hist)}}number of histogram bins ({cmd:pdf} and {cmd:histogram} only){p_end}
 {synopt:{cmd:e(hwidth)}}width of histogram bins ({cmd:pdf} and {cmd:histogram} only){p_end}
 {synopt:{cmd:e(k_omit)}}number of omitted estimates{p_end}
@@ -1332,6 +1395,7 @@ help for {hi:reldist}
 {synopt:{cmd:e(bwmethod)}}bandwidth selection method ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(kernel)}}kernel function ({cmd:pdf} only){p_end}
 {synopt:{cmd:e(exact)}}{cmd:exact} or empty ({cmd:pdf} only){p_end}
+{synopt:{cmd:e(cross)}}{cmd:cross} or empty ({cmd:pdf} and {cmd:histogram} only){p_end}
 {synopt:{cmd:e(statistics)}}names of reported statistics ({cmd:summarize} only){p_end}
 {synopt:{cmd:e(generate)}}name of generated variable ({cmd:summarize} only){p_end}
 {synopt:{cmd:e(wtype)}}weight type{p_end}

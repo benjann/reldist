@@ -1,4 +1,4 @@
-*! version 1.1.7  12jun2020  Ben Jann
+*! version 1.1.8  17jun2020  Ben Jann
 
 local rc 0
 capt findfile lmoremata.mlib
@@ -252,8 +252,11 @@ program Replay
             if `"`e(by)'"'!="" local i = `i' + 2
             if "`subcmd'"=="pdf" {
                 if `"`e(discrete)'"'==""   local i = `i' + 1
-                if `"`e(divergence)'"'!="" local i = `i' + 1
+            }
+            if inlist("`subcmd'","pdf","histogram") {
+                if `"`e(entropy)'"'!=""    local i = `i' + 1
                 if `"`e(chi2)'"'!=""       local i = `i' + 1
+                if `"`e(dissim)'"'!=""     local i = `i' + 1
             }
             if `j'>`i' {
                 mata: Abbrev("xvars", st_global("e(balance)"), 72, 1)
@@ -276,13 +279,21 @@ program Replay
                 di as txt `"`line`++i''"' /*
                     */ as txt _col(49) "Bandwidth" _col(67) "= " as res %10.0g e(bwidth)
             }
-            if `"`e(divergence)'"'!="" {
+        }
+        if inlist("`subcmd'","pdf","histogram") {
+            if `"`e(entropy)'"'!="" {
+                if `"`e(cross)'"'!="" local divnm "Cross divergence"
+                else                  local divnm "Divergence"
                 di as txt `"`line`++i''"' /*
-                    */ as txt _col(49) "Divergence" _col(67) "= " as res %10.0g e(divergence)
+                    */ as txt _col(49) "`divnm'" _col(67) "= " as res %10.0g e(entropy)
             }
             if `"`e(chi2)'"'!="" {
                 di as txt `"`line`++i''"' /*
                     */ as txt _col(49) "Chi-squared" _col(67) "= " as res %10.0g e(chi2)
+            }
+            if `"`e(dissim)'"'!="" {
+                di as txt `"`line`++i''"' /*
+                    */ as txt _col(49) "Dissimilarity" _col(67) "= " as res %10.0g e(dissim)
             }
         }
         while (`i'<`j') { // flush remaining lines
@@ -510,7 +521,7 @@ program __GRAPH_olab // returns oopts and options
     if `"`olabel2'"'!="" local olabel olabel
     if `"`olabel'"'!="" {
         local 0 `"`olabel2'"'
-        syntax [anything] [, FORmat(passthru) * ]
+        syntax [anything] [, FORmat(passthru) NOPRUNE prune(passthru) * ]
         local olabel `"`anything'"'
         if `"`olabel'"'=="" local olabel "#6"
         local olabopts `"`options'"'
@@ -530,7 +541,7 @@ program __GRAPH_olab // returns oopts and options
         local olineopts `"`options'"'
     }
     // get positions
-    if `"`olabel'`otick'`oline'"'=="" exit     // nothing to do
+    if `"`olabel'`otick'`oline'"'=="" exit  // nothing to do
     if `"`e(atx)'"'=="" {
         capt confirm matrix e(ogrid)
         if _rc==1 exit _rc
@@ -539,7 +550,7 @@ program __GRAPH_olab // returns oopts and options
             exit
         }
     }
-    OLABEL `olabel', tick(`otick') line(`oline') `format' `xy'
+    OLABEL `olabel', tick(`otick') line(`oline') `format' `noprune' `prune' `xy'
     local olabel `"`r(label)'"'
     local otick  `"`r(tick)'"'
     local oline  `"`r(line)'"'
@@ -828,7 +839,10 @@ program OLABEL, rclass
         exit 301
     }
     _parse comma lhs 0 : 0
-    syntax [, TICk(numlist sort) LIne(numlist sort) FORmat(str) y ]
+    syntax [, TICk(numlist sort) LIne(numlist sort) FORmat(str) y ///
+        NOPRUNE prune(numlist max=1) ]
+    if "`noprune'"!=""    local prune .
+    else if "`prune'"=="" local prune 0.1
     local tick_x `"`tick'"'
     local line_x `"`line'"'
     if "`y'"!="" {
@@ -868,9 +882,9 @@ program OLABEL, rclass
             }
         }
     }
-    mata: rd_olab("`y'"!="", `atx', "label", "`format'")
-    mata: rd_olab("`y'"!="", `atx', "tick", "")
-    mata: rd_olab("`y'"!="", `atx', "line", "")
+    mata: rd_olab("`y'"!="", `atx', "label", "`format'", `prune')
+    mata: rd_olab("`y'"!="", `atx', "tick", "", .)
+    mata: rd_olab("`y'"!="", `atx', "line", "", .)
     return local label   `"`label'"'
     return local label_x `"`label_x'"'
     return local tick    `"`tick'"'
@@ -1450,12 +1464,13 @@ program PDF, eclass
     syntax [if] [in] [fw iw aw pw/], [ ///
         NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
-        NOOGRID ogrid(numlist int >0 max=1) ///
         BWidth(str) BWADJust(numlist >0 max=1) ///
         BOundary(str) Kernel(string) ///
         ADAPTive(numlist int >=0 max=1) ///
         altlbwf /// (undocumented)
         exact NApprox(numlist int >1 max=1) ///
+        cross(str) ///
+        NOOGRID ogrid(numlist int >0 max=1) ///
         HISTogram HISTogram2(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
@@ -1469,7 +1484,24 @@ program PDF, eclass
     Parse_balance "`by'" "`pooled'" `balance'
     Parse_ogrid "`noogrid'" "`ogrid'" "`atx'"
     if "`histogram'`histogram2'"!="" Parse_n "`histogram2'" 10 "nhist" "histogram"
-    if "`napprox'"=="" local napprox = max(512, `n'+1)
+    if `"`cross'"'!="" {
+        if "`categorical'"!="" {
+            di as err "{bf:cross()} and {bf:categorical} not both allowed"
+            exit 198
+        }
+        if "`discrete'"!="" {
+            di as err "{bf:cross()} and {bf:discrete} not both allowed"
+            exit 198
+        }
+        confirm matrix `cross'
+        tempname CROSS
+        matrix `CROSS' = `cross'
+        local coleq: coleq `CROSS', quoted
+        gettoken coleq : coleq
+        if `"`coleq'"'=="pdf" {
+            matrix `CROSS' = `cross'[1, "pdf:"]
+        }
+    }
     capt confirm number `bwidth'
     if _rc==0 {
         if `bwidth'<=0 {
@@ -1502,7 +1534,7 @@ program PDF, eclass
     }
     
     // compute relative PDF
-    tempname b se AT OGRID BW DIV CHI2 k_omit
+    tempname b se AT OGRID BW DIV CHI2 DISSIM k_omit
     scalar `k_omit' = 0
     mata: rd_PDF(strtoreal("`n'"))
     
@@ -1515,15 +1547,20 @@ program PDF, eclass
     eret local atx          "`atx'"
     eret local discrete     "`discrete'"
     eret local categorical  "`categorical'"
+    eret scalar entropy     = `DIV'
+    eret scalar chi2        = `CHI2'
+    eret scalar dissim      = `DISSIM'
+    if "`CROSS'"!="" {
+        eret local cross "cross"
+    }
     eret scalar n           = `n'
     if "`ogrid'"!="" {
-        eret matrix ogrid    = `OGRID'
+        eret matrix ogrid   = `OGRID'
     }
     if "`nose'"=="" {
         eret matrix se = `se'
     }
     if "`discrete'"=="" {
-        eret scalar napprox  = `napprox'
         eret scalar bwidth   = `BW'
         if "`bwmethod'"=="dpi" {
             local bwmethod `bwmethod'(`bwdpi')
@@ -1533,16 +1570,11 @@ program PDF, eclass
         eret local  kernel   "`kernel'"
         eret scalar adaptive = `adaptive'
         eret local  exact    "`exact'"
+        if "`exact'"=="" {
+            eret scalar napprox = `napprox'
+        }
         eret local  boundary "`boundary'"
         eret local  altlbwf  "`altlbwf'"
-        if "`exact'"=="" {
-            eret scalar divergence = `DIV'
-            eret scalar chi2 = `CHI2'
-        }
-    }
-    else {
-        eret scalar divergence = `DIV'
-        eret scalar chi2 = `CHI2'
     }
     if "`nhist'"!="" {
         eret scalar n_hist = `nhist'
@@ -1593,6 +1625,7 @@ program HIST, eclass
     syntax [if] [in] [fw iw aw pw/], [ ///
         NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >0 max=1) ///
+        cross(str) ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         NOSE Level(cilevel) noHeader NOTABle TABle ///
         GRaph GRaph2(passthru) * ]
@@ -1603,6 +1636,15 @@ program HIST, eclass
     Parse_balance "`by'" "`pooled'" `balance'
     Parse_n "`n'" 10
     Parse_ogrid "`noogrid'" "`ogrid'"
+    if `"`cross'"'!="" {
+        confirm matrix `cross'
+        tempname CROSS
+        matrix `CROSS' = `cross'
+        if colsof(`CROSS')!=`n' {
+            di as err "{bf:cross()} matrix not conformable; must have {bf:n()} columns"
+            exit 499
+        }
+    }
     
     // mark sample
     marksample touse
@@ -1622,7 +1664,7 @@ program HIST, eclass
     }
     
     // compute relative PDF
-    tempname b AT OGRID k_omit
+    tempname b AT OGRID DIV CHI2 DISSIM k_omit
     scalar `k_omit' = 0
     mata: rd_HIST(`n')
     
@@ -1632,8 +1674,14 @@ program HIST, eclass
     eret local  subcmd   "histogram"
     eret local  title    "Relative histogram"
     eret matrix at       = `AT'
+    eret scalar entropy  = `DIV'
+    eret scalar chi2     = `CHI2'
+    eret scalar dissim   = `DISSIM'
+    if "`CROSS'"!="" {
+        eret local cross "cross"
+    }
     if "`ogrid'"!="" {
-        eret matrix ogrid    = `OGRID'
+        eret matrix ogrid = `OGRID'
     }
     eret scalar n_hist   = `n'
     eret scalar hwidth   = 1/`n'
@@ -1697,7 +1745,7 @@ program CDF, eclass
     eret local atx         "`atx'"
     eret local discrete    "`discrete'"
     eret local categorical "`categorical'"
-    eret local categorical "`alt'"
+    eret local alt         "`alt'"
     eret local origin      "`origin'"
     if "`ogrid'"!="" {
         eret matrix ogrid  = `OGRID'
@@ -1710,19 +1758,21 @@ program MRP, eclass
     Parse_syntax `0'
     syntax [if] [in] [fw iw aw pw/], [ ///
         NOBReak NOMID DESCending BALance(str) Over(varname numeric) ///
-        SCale SCale2(str) MULTiplicative LOGarithmic ///
+        SCale SCale2(str) MULTiplicative LOGarithmic REFerence ///
         NOSE Level(cilevel) noHeader NOTABle TABle * ]
     if "`nobreak'"!="" local descending
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header' `notable' `table'
     if `"`scale2'"'!="" local scale scale
-    local adj1 location
+    if "`reference'"!="" local adj adj0
+    else                 local adj adj1
+    local `adj' location
     if "`scale'"!="" {
         if "`multiplicative'"!="" {
             di as err "{bf:scale} and {bf:multiplicative} not both allowed"
             exit 198
         }
-        local adj1 `adj1' scale
+        local `adj' ``adj'' scale
         if `"`scale2'"'=="sd" {
             local adjsd sd
         }
@@ -1935,7 +1985,8 @@ void Abbrev(`SS' nm, `SS' s, `Int' l, | `Bool' dots)
     
     if (l<=32) st_local(nm, abbrev(s, l))
     else if (stataversion()>=1400) {
-        if (args()<4) st_local(nm, udsubstr(s, 1, l))
+        if (args()<4) dots = 0
+        if (dots==0) st_local(nm, udsubstr(s, 1, l))
         else {
             l1 = udstrlen(s)
             if (l1<=l) st_local(nm, s)
@@ -1943,7 +1994,8 @@ void Abbrev(`SS' nm, `SS' s, `Int' l, | `Bool' dots)
         }
     }
     else {
-        if (args()<4) st_local(nm, substr(s, 1, l))
+        if (args()<4) dots = 0
+        if (dots==0) st_local(nm, substr(s, 1, l))
         else {
             l1 = strlen(s)
             if (l1<=l) st_local(nm, s)
@@ -2065,7 +2117,7 @@ void rd_svmat(`SS' nm, `SR' vnms, `Bool' transpose)
     st_store((1,rows(M)), st_addvar("double",vnms), M)
 }
 
-void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
+void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt, `RS' prune)
 {
     `RR' y, x
     `RC' p
@@ -2081,7 +2133,7 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
     }
     if (substr(st_local(nm),1,1)=="#") {
         x = strtoreal(substr(st_local(nm),2,.))
-        x = _rd_uniq(_rd_quantile(y', (p-(0,p[|1\length(p)-1|]))', (0::x-1)/(x-1), 1))'
+        x = _rd_uniq(_rd_quantile(y', _rd_step(p)', (0::x-1)/(x-1), 1))'
         st_local(nm+"_x", invtokens(strofreal(x)))
     }
     else {
@@ -2091,7 +2143,7 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
             return
         }
     }
-    st_local(nm, _rd_olab_fmt(_rd_olab_pos(y, p, x), x, fmt))
+    st_local(nm, _rd_olab_fmt(_rd_olab_pos(y, p, x), x, fmt, prune))
 }
 
 `RV' _rd_olab_pos(`RV' y, `RV' p, `RV' x)
@@ -2121,10 +2173,33 @@ void rd_olab(`Bool' cdf, `Bool' atx, `SS' nm, `SS' fmt)
     return(P)
 }
 
-`SS' _rd_olab_fmt(`RR' p, | `RR' x, `SS' fmt)
+`SS' _rd_olab_fmt(`RR' p, | `RR' x, `SS' fmt, `RS' prune)
 {
+    `Int' i, r
+    `RS'  p0
+    `SR'  lbl
+    
     if (fmt=="") return(invtokens(strofreal(p)))
-    return(invtokens((strofreal(p) :+ `" ""' :+ strofreal(x, fmt)  :+ `"""')))
+    lbl = `"""' :+ strofreal(x, fmt)  :+ `"""'
+    if (prune<.) {
+        p0 = .
+        r = length(p)
+        for (i=1; i<=r;i++) {
+            if (i<r) {
+                if (p[i]==p[i+1]) {
+                    // ties in p: print largest label
+                    lbl[i] = `"" ""'
+                    continue
+                }
+            }
+            if ((p[i]-p0)<prune) {
+                lbl[i] = `"" ""'
+                continue
+            }
+            p0 = p[i]
+        }
+    }
+    return(invtokens((strofreal(p) :+ " " :+ lbl)))
 }
 
 /* Data preparation and some common functions -------------------------------*/
@@ -2579,22 +2654,20 @@ void rd_PDF_discrete(`Data' data, `Int' n, `RC' at, `RC' atx)
 
 `RC' _rd_PDF_discrete_b(`RC' Y, `RC' w, `RC' atx, `RC' at)
 {
-    `Int' n
     `RC'  b, p
     
     b = _rd_relrank(Y, w, atx, ., 0, 0)
-    n = rows(b)
-    b = b  - (0 \  b[|1\n-1|])
-    p = at - (0 \ at[|1\n-1|])
-    b = b :/ p
+    b = _rd_step(b)
+    p = _rd_step(at)
     _rd_PDF_discrete_div(b, p)
-    return(b)
+    return(b :/ p)
 }
 
-void _rd_PDF_discrete_div(`RC' b, `RC' p) // compute divergence and chi2
-{   
-    st_numscalar(st_local("DIV"),  sum(b :* ln(b) :* p))
-    st_numscalar(st_local("CHI2"), sum((b :- 1):^2 :* p))
+void _rd_PDF_discrete_div(`RC' b, `RC' p) 
+{
+    st_numscalar(st_local("DIV"),    sum(b :* (ln(b) - ln(p))))
+    st_numscalar(st_local("CHI2"),   sum((b - p):^2 :/ p))
+    st_numscalar(st_local("DISSIM"), sum(abs(b - p))/2)
 }
 
 void _rd_PDF_discrete_rm(`RC' b, `RC' at, `RC' atx, `Int' n)
@@ -2640,7 +2713,13 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
     kernel   = _mm_unabkern(st_local("kernel"))
     adaptive = strtoreal(st_local("adaptive"))
     exact    = (st_local("exact")!="")
-    n0       = strtoreal(st_local("napprox"))
+    if (exact==0) {
+        n0 = strtoreal(st_local("napprox"))
+        if (n0>=.) {
+            n0 = max((512, rows(at)))
+            st_local("napprox", strofreal(n0))
+        }
+    }
     altlbwf  = (st_local("altlbwf")!="")
     boundary = 0 + (st_local("boundary")=="reflect") + 2*(st_local("boundary")=="lc")
     nose     = (st_local("nose")!="")
@@ -2691,13 +2770,18 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
         v = v + rd_PDF_varincr(data.N0, data.w0, b, bw*lbwf, kernel, pw)
     }
     
+    // map approximation estimator to output grid
+    if (exact==0) {
+        b = mm_ipolate(at0, b, at)
+        if (nose==0) v = mm_ipolate(at0, v, at)
+    }
+    
     // return results
     if (nhist<.) cstripe = J(n, 1, "pdf")
     else         cstripe = J(n, 1, "")
     if (data.method) cstripe = cstripe, "x" :+ strofreal(1::n)
     else             cstripe = cstripe, "p" :+ strofreal(1::n)
-    if (exact) st_matrix(st_local("b"), b')
-    else       st_matrix(st_local("b"), mm_ipolate(at0, b, at)')
+    st_matrix(st_local("b"), b')
     st_matrixcolstripe(st_local("b"), cstripe)
     st_matrix(st_local("AT"), (at, atx)')
     st_matrixcolstripe(st_local("AT"), cstripe)
@@ -2705,17 +2789,12 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
     st_numscalar(st_local("BW"), bw)
     st_local("kernel", kernel)
     if (nose==0) {
-        if (exact) st_matrix(st_local("se"), sqrt(v)')
-        else       st_matrix(st_local("se"), mm_ipolate(at0, sqrt(v), at)')
+        st_matrix(st_local("se"), sqrt(v)')
         st_matrixcolstripe(st_local("se"), cstripe)
     }
     
     // divergence
-    if (exact==0) {
-        gc = J(rows(b),1,1); gc[1] = .5; gc[rows(gc)] = .5 // 1/2 weight at boundary
-        st_numscalar(st_local("DIV"), mean(b :* ln(b), gc))
-        st_numscalar(st_local("CHI2"), mean((b :-1):^2, gc))
-    }
+    _rd_PDF_div(b, at)
     
     // append histogram
     if (nhist<.) {
@@ -2730,6 +2809,35 @@ void rd_PDF_continuous(`Data' data, `Int' n, `RC' at, `RC' atx)
             st_matrixcolstripe(st_local("se"), cstripe)
         }
     }
+}
+
+void _rd_PDF_div(`RC' b, `RC' at)
+{
+    `Int' r
+    `RS'  d
+    `RC'  p, b1
+
+    // compute bin widths: use half a step from below and half a step from 
+    // above while restricting the range at 0 from below and 1 from above
+    r = rows(at)
+    p = _rd_step(at) // step from below
+    if (r==1) p = (p + (1-at)) / 2
+    else      p = (p + /*step from above:*/(p[|2\r|] \ (1-at[r]))) / 2
+    
+    // compute divergence
+    if (st_local("CROSS")=="") d = sum(b :* ln(b) :* p)
+    else {
+        b1 = st_matrix(st_local("CROSS"))[1,]'
+        if (rows(b1)!=rows(b)) {
+            printf("{err}{bf:cross()} matrix not conformable; " +
+                " must contain %g evaluation points (columns)\n", rows(b))
+            exit(499)
+        }
+        d = sum(b1 :* ln(b) :* p)
+    }
+    st_numscalar(st_local("DIV"),    d)
+    st_numscalar(st_local("CHI2"),   sum((b :- 1):^2 :* p))
+    st_numscalar(st_local("DISSIM"), sum(abs(b :- 1)/2 :* p))
 }
 
 // bandwidth estimation
@@ -2894,6 +3002,9 @@ void rd_HIST(`Int' n)
     st_matrixcolstripe(st_local("AT"), cstripe)
     st_matrixrowstripe(st_local("AT"), (J(2,1,""), ("p" \ "x")))
     
+    // divergence
+    _rd_HIST_div(b)
+    
     // outcome grid
     rd_ogrid(data, 0)
 }
@@ -2908,6 +3019,17 @@ void rd_HIST(`Int' n)
     at = at[|1 \ n |] :+ .5/n
     atx = _rd_quantile(*data.Y0, *data.W0, at, 1)
     return(b)
+}
+
+void _rd_HIST_div(`RC' b)
+{
+    `RS' d
+    
+    if (st_local("CROSS")=="")           d = sum(b :* ln(b)) / rows(b)
+    else d = sum(st_matrix(st_local("CROSS"))[1,]' :* ln(b)) / rows(b)
+    st_numscalar(st_local("DIV"),    d)
+    st_numscalar(st_local("CHI2"),   sum(abs(b:-1):^2) / rows(b))
+    st_numscalar(st_local("DISSIM"), sum(abs(b:-1))/2  / rows(b))
 }
 
 /* CDF estimation -----------------------------------------------------------*/
@@ -2958,7 +3080,16 @@ void rd_CDF(`Int' n)
         }
     }
     
-    // - outcome grid
+    // // divergence measures (computed based on output grid; results will
+    // // be different depending spacing and number of grid points)
+    // `RC' p1, p0
+    // p1 = _rd_step(b)
+    // p0 = _rd_step(at)
+    // sum(p1 :* (ln(p1) - ln(p0)))
+    // sum((p1 - p0):^2 :/ p0)
+    // sum(abs(p1 - p0))/2
+    
+    // outcome grid
     rd_ogrid(data, 1)
 }
 
@@ -3008,7 +3139,7 @@ void rd_CDF(`Int' n)
     x    = _rd_uniq(sort(_rd_uniq(*data.Y1) \ _rd_uniq(*data.Y0), 1))
     cdf1 = 0 \ _rd_relrank(*data.Y1, *data.W1, x, ., 0, 0)
     cdf0 = 0 \ _rd_relrank(*data.Y0, *data.W0, x, ., 0, 0)
-    
+
     // interpolate
     j = rows(cdf0)
     i = rows(at)
@@ -3068,8 +3199,7 @@ void rd_MRP(`SS' bnm)
     b = J(1,3,.)
     b[2] = 8 * mean( -d :* (d:<0), *data.W1) - 1 // LRP
     b[3] = 8 * mean(  d :* (d:>0), *data.W1) - 1 // URP
-    b[1] = (b[2] + b[3]) / 2                     // MRP
-    //b[1] = 4 * mean(abs(d), *data.W1) - 1
+    b[1] = (b[2] + b[3]) / 2  // MRP (= 4 * mean(abs(d), *data.W1) - 1)
     
     // return results
     st_matrix(bnm, b)
@@ -3311,7 +3441,7 @@ void rd_SUM()
     i = rows(x)
     r = J(i, 1, 0)
     j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
+    step = _rd_step(cdf)
     for (; i; i--) {
         xi = x[i]
         for (; j; j--) {
@@ -3335,7 +3465,7 @@ void rd_SUM()
     i = rows(x)
     r = J(i, 1, 0)
     j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
+    step = _rd_step(cdf)
     for (; i; i--) {
         xi = x[i]
         for (; j; j--) {
@@ -3366,7 +3496,7 @@ void rd_SUM()
     i = rows(x)
     r = J(i, 1, 0)
     j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
+    step = _rd_step(cdf)
     for (; i; i--) {
         xi = x[i]
         for (; j; j--) {
@@ -3400,7 +3530,7 @@ void rd_SUM()
     i = rows(x)
     r = J(i, 1, 0)
     j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
+    step = _rd_step(cdf)
     for (; i; i--) {
         xi = x[i]
         for (; j; j--) {
@@ -3439,7 +3569,7 @@ void rd_SUM()
     i = rows(x)
     r = J(i, 1, 0)
     j = rows(y)
-    step = cdf - (0 \ cdf[|1\j-1|])
+    step = _rd_step(cdf)
     for (; i; i--) {
         xi = x[i]
         for (; j; j--) {
@@ -3471,6 +3601,17 @@ void rd_SUM()
         else break // x[i] is smaller than min(y)
     }
     return(r)
+}
+
+`RV' _rd_step(`RV' x)
+{
+    `Int' n
+    
+    n = length(x)
+    if (n<1)        return(x)
+    if (n==1)       return(x - 0)
+    if (rows(x)==n) return(x :- (0 \ x[|1\n-1|]))
+                    return(x :- (0, x[|1\n-1|]))
 }
 
 end
