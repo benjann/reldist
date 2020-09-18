@@ -1,5 +1,5 @@
 {smcl}
-{* 17jun2020}{...}
+{* 18sep2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -8,7 +8,8 @@
 {viewerjumpto "Saved results" "reldist##saved_results"}{...}
 {viewerjumpto "References" "reldist##references"}{...}
 {hline}
-help for {hi:reldist}
+help for {hi:reldist}{...}
+{right:{browse "http://github.com/benjann/reldist/"}}
 {hline}
 
 {title:Title}
@@ -41,12 +42,13 @@ help for {hi:reldist}
 {pmore}
     where {it:subcmd} is
 
-{p2colset 13 24 26 2}{...}
-{p2col:{opt pdf}}compute relative density{p_end}
-{p2col:{opt hist:ogram}}compute relative histogram{p_end}
-{p2col:{opt cdf}}compute cumulative relative distribution{p_end}
-{p2col:{opt mrp}}compute median relative polarization{p_end}
-{p2col:{opt su:mmarize}}summarize relative ranks{p_end}
+{p2colset 13 25 27 2}{...}
+{p2col:{opt pdf}}relative density{p_end}
+{p2col:{opt hist:ogram}}relative histogram{p_end}
+{p2col:{opt cdf}}relative cumulative distribution{p_end}
+{p2col:{opt div:ergence}}divergence measures{p_end}
+{p2col:{opt mrp}}median relative polarization{p_end}
+{p2col:{opt su:mmarize}}summary statistics of relative ranks{p_end}
 
 {pstd}
     Replay results
@@ -61,6 +63,13 @@ help for {hi:reldist}
 {cmd:reldist} {cmdab:gr:aph}
     [{cmd:,} {help reldist##graph_opts:{it:graph_options}} ]
 
+{pstd}
+    Obtain influence functions after estimation
+
+{p 8 17 2}
+    {cmd:predict} {c -(}{help newvarlist##stub*:{it:stub}}{cmd:*} | {it:{help newvar:newvar1}} {it:{help newvar:newvar2}} {cmd:...}{c )-} {ifin}
+        [{cmd:,} {opt sc:ores} {it:{help reldist##density_opts:density_options}} ]
+
 
 {synoptset 26 tabbed}{...}
 {marker opts}{col 5}{help reldist##options:{it:options}}{col 33}Description
@@ -70,17 +79,18 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt swap}}reverse order of groups (syntax 1 only)
     {p_end}
+{synopt:{opt pool:ed}}use pooled distribution as reference distribution  (syntax 1 only)
+    {p_end}
+{synopt:{cmdab:bal:ance(}{help reldist##balance:{it:spec}}{cmd:)}}balance
+    covariates using reweighting (syntax 1 only)
+    {p_end}
+{synopt:{cmdab:adj:ust(}{help reldist##adjust:{it:spec}}{cmd:)}}location and scale adjustment (not allowed for {cmd:mrp})
+    {p_end}
 {synopt:{opt nobr:eak}}do not break ties when computing relative ranks
     {p_end}
 {synopt:{opt nomid}}do not use midpoints when computing relative ranks
     {p_end}
 {synopt:{opt desc:ending}}sort tied observations in descending order of weights
-    {p_end}
-{synopt:{opt pool:ed}}use pooled distribution as reference distribution
-    {p_end}
-{synopt:{cmdab:adj:ust(}{help reldist##adjust:{it:spec}}{cmd:)}}location and scale adjustment (not allowed for {cmd:mrp})
-    {p_end}
-{synopt:{cmdab:bal:ance(}{it:{help varlist:xvars}}[{cmd:,} {help reldist##balance:{it:opts}}]{cmd:)}}balance covariates (syntax 1 only)
     {p_end}
 
 {syntab:{help reldist##pdfopts:Subcommand {bf:pdf}}}
@@ -97,11 +107,11 @@ help for {hi:reldist}
 {synopt:{cmdab:hist:ogram}[{cmd:(}{it:#}{cmd:)}]}include
     histogram using {it:#} bins; default is {it:#} = 10
     {p_end}
+{synopt:{opt alt}}use alternative estimation method for histogram
+    {p_end}
 {synopt:{help reldist##density_opts:{it:density_options}}}density estimation options
     {p_end}
-{synopt:{opt cross(matname)}}compute cross-entropy divergence using {it:matname}
-    {p_end}
-{synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
+{synopt:{opt gr:aph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
 {synopt:{opt ogrid(#)} | {opt noogrid}}set size of outcome label approximation grid
     {p_end}
@@ -109,9 +119,13 @@ help for {hi:reldist}
 {syntab:{help reldist##histopts:Subcommand {bf:histogram}}}
 {synopt:{opt n(#)}}number of histogram bins; default is {cmd:n(10)}
     {p_end}
-{synopt:{opt cross(matname)}}compute cross-entropy divergence using {it:matname}
+{synopt:{opt alt}}use alternative estimation method
     {p_end}
-{synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
+{synopt:{opt discr:ete}}treat data as discrete
+    {p_end}
+{synopt:{opt cat:egorical}}treat data as categorical
+    {p_end}
+{synopt:{opt gr:aph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
 {synopt:{opt ogrid(#)} | {opt noogrid}}set size of outcome label approximation grid
     {p_end}
@@ -123,19 +137,47 @@ help for {hi:reldist}
     {p_end}
 {synopt:{cmd:atx}[{cmd:(}{help reldist##cdfatx:{it:spec}}{cmd:)}]}evaluate relative CDF at outcome values
     {p_end}
+{synopt:{opt alt}}use alternative estimation method
+    {p_end}
 {synopt:{opt discr:ete}}treat data as discrete
     {p_end}
 {synopt:{opt cat:egorical}}treat data as categorical
     {p_end}
-{synopt:{opt alt}}use alternative estimation method
-    {p_end}
-{synopt:{opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
+{synopt:{opt gr:aph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]}display graph
     {p_end}
 {synopt:{opt ogrid(#)} | {opt noogrid}}set size of outcome label approximation grid
     {p_end}
 
+{syntab:{help reldist##divopts:Subcommand {bf:divergence}}}
+{synopt:{cmdab:o:ver(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
+    {p_end}
+{synopt:{opt en:tropy} or {opt kl}}report Kullback-Leibler divergence (entropy); this is the default
+    {p_end}
+{synopt:{opt chi:2} or {opt chisq:uared}}report the Chi-squared divergence
+    {p_end}
+{synopt:{opt tvd} or {opt dis:similarity}}report the dissimilarity index (total variation distance)
+    {p_end}
+{synopt:{opt all}}report all divergence measures
+    {p_end}
+{synopt:{opt n(#)}}size of evaluation grid
+    {p_end}
+{synopt:{opt alt}}use alternative estimation method for histogram
+    {p_end}
+{synopt:{opt pdf}}use kernel density estimator instead of histogram
+    {p_end}
+{synopt:{help reldist##density_opts:{it:density_options}}}density estimation options; only
+    relevant if {cmd:pdf} is specified
+    {p_end}
+{synopt:{opt discr:ete}}treat data as discrete
+    {p_end}
+{synopt:{opt cat:egorical}}treat data as categorical
+    {p_end}
+{synopt:{opt com:pare}[{cmd:(}{help reldist##divcom:{it:options}}{cmd:)}]}compare divergence measures
+    between two models
+    {p_end}
+
 {syntab:{help reldist##mrpopts:Subcommand {bf:mrp}}}
-{synopt:{cmd:over(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
+{synopt:{cmdab:o:ver(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
     {p_end}
 {synopt:{opt mult:iplicative}}use multiplicative (instead of additive) adjustment
     {p_end}
@@ -143,13 +185,11 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt sc:ale}[{cmd:(sd)}]}adjust scale between distributions
     {p_end}
-{synopt:{opt ref:erence}}adjust the reference distribution
-    {p_end}
 
 {syntab:{help reldist##sumopts:Subcommand {bf:summarize}}}
-{synopt:{cmd:over(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
+{synopt:{cmdab:o:ver(}{help varname:{it:overvar}}{cmd:)}}compute results for subpopulations defined by {it:overvar}
     {p_end}
-{synopt:{cmdab:s:tatistics(}{help tabstat##statname:{it:statnames}}{cmd:)}}report
+{synopt:{cmdab:s:tatistics(}{help reldist##statistics:{it:statnames}}{cmd:)}}report
     specified statistics
     {p_end}
 {synopt:{opth g:enerate(newvar)}}store the relative ranks in {it:newvar}
@@ -161,12 +201,15 @@ help for {hi:reldist}
 {synopt:{opt l:evel(#)}}set confidence level; default is {cmd:level(95)}
     {p_end}
 {synopt:{cmd:vce(}{help reldist##vce:{it:vcetype}}{cmd:)}}variance estimation method;
-    {it:vcetype} may be {bf:bootstrap} or {bf:jackknife}
+    {it:vcetype} may be {cmdab:a:nalytic}, {cmdab:cl:uster} {it:clustvar}, {cmdab:svy}, {cmdab:boot:strap},
+    or {cmdab:jack:knife}
     {p_end}
 {synopt:{opt nose}}do not compute standard errors
     {p_end}
 
 {syntab:{help reldist##reprtopts:Reporting}}
+{synopt:{opt citrans:form}}report transformed confidence intervals
+    {p_end}
 {synopt:{opt nohead:er}}suppress display of output header
     {p_end}
 {synopt:[{cmd:{ul:no}}]{cmdab:tab:le}}suppress/enforce display of coefficients table
@@ -175,7 +218,7 @@ help for {hi:reldist}
     {p_end}
 {synoptline}
 {pstd}
-{cmd:fweight}s, {cmd:aweight}s, {cmd:iweight}s, and {cmd:pweight}s are allowed; see {help weight}.
+{cmd:fweight}s, {cmd:pweight}s, and {cmd:iweight}s are allowed; see {help weight}.
 
 
 {marker density_opts}{col 5}{help reldist##density_options:{it:density_options}}{col 33}Description
@@ -185,16 +228,16 @@ help for {hi:reldist}
     {p_end}
 {synopt:{opt bwadj:ust(#)}}rescale bandwidth by {it:#}, {it:#} > 0
     {p_end}
-{synopt:{opt adapt:ive(#)}}number of iterations of the adaptive
-    density estimator; default is {cmd:adaptive(1)}
-    {p_end}
 {synopt:{cmdab:bo:undary(}{help reldist##boundary:{it:method}}{cmd:)}}boundary correction method;
     default is {cmd:boundary(renorm)}{p_end}
-{synopt:{cmdab:k:ernel(}{help reldist##kernel:{it:kernel}}{cmd:)}}type of kernel function; default is
-    {cmd:kernel(epan2)}
+{synopt:{opt adapt:ive(#)}}number of iterations of the adaptive
+    density estimator; default is {cmd:adaptive(0)}
     {p_end}
-{synopt:{opt na:pprox(#)}}set grid size of approximation estimator; default
-    is {cmd:max(512,n())}
+{synopt:{cmdab:k:ernel(}{help reldist##kernel:{it:kernel}}{cmd:)}}type of kernel function; default is
+    {cmd:kernel(gaussian)}
+    {p_end}
+{synopt:{opt na:pprox(#)}}grid size of approximation estimator; default
+    is {cmd:napprox(512)}
     {p_end}
 {synopt:{opt exact}}use the exact density estimator
     {p_end}
@@ -230,7 +273,9 @@ help for {hi:reldist}
     {p_end}
 
 {syntab:Confidence intervals}
-{synopt:{opt l:evel(#)}}set confidence level; default is as set during estimation
+{synopt:{opt l:evel(#)}}set confidence level
+    {p_end}
+{synopt:{opt citrans:form}}plot transformed confidence intervals
     {p_end}
 {synopt:{opt ci(name)}}obtain confidence intervals from {cmd:e(}{it:name}{cmd:)}
     {p_end}
@@ -266,7 +311,7 @@ help for {hi:reldist}
 
 {pstd}
     {cmd:reldist} provides a set of tools for relative distribution analysis. For
-    background information and details see Handcock and Morris (1998, 1999).
+    background information see Handcock and Morris (1998, 1999).
 
 {phang}
     o  Command {cmd:reldist pdf} estimates the density function of the
@@ -276,9 +321,14 @@ help for {hi:reldist}
     o  Command {cmd:reldist histogram} estimates a histogram of the relative density.
 
 {phang}
-    o  Command {cmd:reldist cdf} estimates the relatibe distribution function. This is
+    o  Command {cmd:reldist cdf} estimates the relative distribution function. This is
     equivalent to a so-called probability-probability plot
      (see {helpb ppplot} from {stata ssc describe ppplot:SSC}).
+
+{phang}
+    o  Command {cmd:reldist divergence} estimates the Kullback-Leibler divergence (entropy),
+    the Chi-squared divergence, or the dissimilarity index (total variation distance) of the
+    relative distribution.
 
 {phang}
     o  Command {cmd:reldist mrp} estimates the
@@ -286,13 +336,17 @@ help for {hi:reldist}
     lower and and upper polarization index (LRP and URP).
 
 {phang}
-    o  Command {cmd:reldist summarize} computes summary measures such as the mean
-    and median of the relative data, and can also be used to store the relative
+    o  Command {cmd:reldist summarize} computes summary statistics such as the mean
+    or the median of the relative ranks, and can also be used to store the relative
     ranks in a new variable.
 
 {phang}
-    o  Command {cmd:reldist graph} can be used after {cmd:reldist pdf},
-    {cmd:reldist histogram}, or {cmd:reldist cdf} to plot the results.
+    o  Command {cmd:reldist graph} plots the results after {cmd:reldist pdf},
+    {cmd:reldist histogram}, or {cmd:reldist cdf}.
+
+{phang}
+    o  Command {cmd:predict} calculates the influence functions of the estimated
+    statistics. Option {cmd:scores} is implied.
 
 {pstd}
     There are two syntaxes:
@@ -308,10 +362,9 @@ help for {hi:reldist}
     sample (paired relative distribution).
 
 {pstd}
-    {cmd:reldist} requires {cmd:kdens}, {cmd:kmatch}, and {cmd:moremata}
+    {cmd:reldist} requires {cmd:kmatch} and {cmd:moremata}
     to be installed on the system. See
-    {net "describe kdens, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kdens}},
-    {net "describe kmatch, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kmatch}},
+    {net "describe kmatch, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kmatch}}
     and
     {net "describe moremata, from(http://fmwww.bc.edu/repec/bocode/m/)":{bf:ssc describe moremata}}.
 
@@ -333,39 +386,79 @@ help for {hi:reldist}
     only allowed in syntax 1.
 
 {phang}
-    {opt nobreak} changes how the relative ranks are computed in case of ties. By
-    default, {cmd:reldist} breaks ties randomly for comparison values that have
-    ties in the reference distribution (in ascending order of weights, if
-    weights have been specified). This leads to improved results if there is
-    heaping in the data. Specify {cmd:nobreak} to omit breaking ties. Option
-    {cmd:nobreak} has no effect for {cmd:reldist cdf}.
+    {opt pooled} uses the pooled distribution across both groups as reference
+    distribution. {opt pooled} is
+    only allowed in syntax 1.
 
+{marker balance}{...}
 {phang}
-    {opt nomid} changes how the relative ranks are computed in case of ties. By
-    default, {cmd:reldist} uses midpoints of the steps in the cumulative
-    distribution for comparison values that have ties in the
-    reference distribution. This ensures that the average
-    relative rank is equal to 0.5 if the comparison and reference distributions
-    are identical. Specify {cmd:nomid} to assign relative ranks based on full
-    steps in the CDF. Option {cmd:nomid} has no effect for {cmd:reldist cdf}.
+    {cmd:balance(}{it:spec}{cmd:)} balances covariate distributions between the
+    comparison group and the reference group using reweighting. {opt balance()}
+    is only allowed in syntax 1. The syntax of {it:spec} is
 
-{phang}
-    {opt descending} sorts tied observations in descending order of
-    weights. The default is to use ascending sort order. Option
-    {opt descending} has no effect if {cmd:nobreak} is specified or
-    if there are no weights. Furthermore, it has no effect
-    for {cmd:reldist cdf}.
-
-{phang}
-    {opt pooled} uses the pooled distribution across both groups (syntax 1) or
-    across both variables (syntax 2) as the reference distribution.
+            [{it:method}{cmd::}] {varlist} [{cmd:,} {it:options}]
 
 {pmore}
-    Note that {helpb reldist##adjust:shape} adjustment of the comparison
-    distribution is not supported by {cmd:reldist sum} in syntax 2 if option
-    {cmd:pooled} is specified (because the resulting relative ranks cannot
-    be stored without changing the data structure in this case). Use syntax 1
-    on reshaped data to perform such an analysis; see help {helpb reshape}.
+    where {it:method} is either {cmd:ipw} for inverse probability weighting based
+    on logistic regression (the default) or {cmd:eb} for entropy balancing (using
+    {helpb mf_mm_ebal:mm_ebal()} from {helpb moremata}),
+    {it:varlist} specifies the list of covariates to be balanced, and
+    {it:options} are as follows:
+
+{phang2}
+    {opt ref:erence} reweights the reference group. The
+    default is to reweight the comparison group. Option
+    {cmd:pooled} is not allowed with {cmd:balance(, reference)}.
+
+{phang2}
+    {opt cont:rast} compares the balanced distribution with the unbalanced
+    distribution. Use this option to see how the balancing changes the
+    distribution. If {cmd:contrast} is specified together with {cmd:reference},
+    the balanced reference distribution will be used as the comparison
+    distribution. If {cmd:contrast} is specified without {cmd:reference}, the
+    balanced comparison distribution will be used as the reference
+    distribution.
+
+{phang2}
+    {it:logit_options} are options to be passed through to {helpb logit}. {it:logit_options}
+    are only allowed if {it:method} is {cmd:ipw}.
+
+{phang2}
+    {opt btol:erance(#)}, {it:#}>=0, specifies the tolerance for the entropy
+    balancing algorithm. The default is {cmd:btolerance(1e-5)}. A warning
+    message is displayed if a balancing solution is not within the specified
+    tolerance. {cmd:btolerance()} is only allowed if {it:method} is {cmd:eb}.
+
+{phang2}
+    {opt noi:sily} displays the output of the balancing procedure.
+
+{phang2}
+    {opt gen:erate(newvar)} stores the balancing weights in variable
+    {it:newvar}. This is useful if you want to check whether covariates have been
+    successfully balanced. An example is as follows:
+
+            . {stata sysuse nlsw88, clear}
+{p 12 14 2}
+            . {stata reldist summarize wage, by(union) balance(collgrad ttl_exp, generate(wbal))}
+            {p_end}
+{p 12 14 2}
+            . {stata tabstat collgrad ttl_exp if wage<., by(union) nototal} (unbalanced)
+            {p_end}
+{p 12 14 2}
+            . {stata tabstat collgrad ttl_exp [aw=wbal], by(union) nototal} (balanced)
+            {p_end}
+
+{pmore2}
+    The balancing has been quite successful with respect to the means of the
+    covariates. Perfect balancing (with respect to the means) can be achieved by entropy balancing:
+
+            . {stata drop wbal}
+{p 12 14 2}
+            . {stata "reldist summarize wage, by(union) balance(eb:collgrad ttl_exp, generate(wbal))"}
+            {p_end}
+{p 12 14 2}
+            . {stata tabstat collgrad ttl_exp [aw=wbal], by(union) nototal}
+            {p_end}
 
 {marker adjust}{...}
 {phang}
@@ -373,24 +466,28 @@ help for {hi:reldist}
     the comparison and reference distributions. {cmd:adjust()} is not allowed
     with {cmd:reldist mrp}. The syntax of {it:spec} is
 
-            [{it:adjust}] [{cmd::} {it:refadjust}] [{cmd:,} {it:options}]
+            {it:adjust} [{cmd:,} {it:options}]
 
 {pmore}
-    where {it:adjust} specifies the adjustments to be applied to the
-    comparison distribution and {it:refadjust} specifies the adjustments to be applied to the
-    reference distribution. {it:adjust} and {it:refadjust} may contain any combination of
+    where {it:adjust} specifies the desired adjustments. {it:adjust} may contain
+    any combination of at most two of the following keywords:
 
             {cmdab:l:ocation}   adjust location
             {cmdab:sc:ale}      adjust scale
             {cmdab:sh:ape}      adjust shape
 
 {pmore}
-    For example, type {cmd:adjust(location scale)} to adjust the location and scale
-    of the comparison distribution to the corresponding values of the reference
-    distribution. Likewise, you could type {cmd:adjust(:location scale)} to adjust
-    the reference distribution. Furthermore, {cmd:adjust(location : shape)} would
-    adjust the location of the comparison distribution and the shape of the
-    reference distribution. {it:options} are as follows:
+    By default, the specified adjustments
+    are applied to the comparison distribution. However, a colon may be included
+    in {it:adjust} to distinguish between distributions: Keywords before the
+    colon affect the comparison distribution; keywords after the colon affect
+    the reference distribution. For example, type
+    {cmd:adjust(location scale)} to adjust the location and scale of the
+    comparison distribution. Likewise, you could type {cmd:adjust(:location scale)} to
+    adjust the reference distribution. Furthermore,
+    {cmd:adjust(location : shape)} would adjust the location of the comparison
+    distribution and the shape of the reference distribution. {it:options} are
+    as follows:
 
 {phang2}
     {opt mean} uses the mean for the location adjustment. The default is to
@@ -402,59 +499,39 @@ help for {hi:reldist}
 
 {phang2}
     {opt mult:iplicative} uses a multiplicative adjustment instead of an additive
-    adjustment. The location ratio
-    between comparison distribution and reference distribution must be
-    strictly positive and {cmd:scale} is not allowed in this case.
+    adjustment. {it:adjust} may only contain one keyword in this case, either
+    {cmd:location} or {cmd:shape}. Error will be returned if the
+    location ratio between the comparison distribution and the reference
+    distribution is not strictly positive.
 
 {phang2}
     {opt log:arithmic} performs the adjustments on logarithmically transformed
-    data. The data must be strictly positive in this case.
+    data. Error will be returned if the data is not strictly positive.
 
-{marker balance}{...}
 {phang}
-    {cmd:balance(}{it:{help varlist:xvars}}[{cmd:,} {it:options}{cmd:)} balances covariate
-    distributions between the comparison group and the reference group using
-    reweighting, where {it:xvars} specifies the list of covariates to be
-    balanced (only allowed in syntax 1). The balancing weights are obtained
-    using command {helpb kmatch}. {it:options} are as follows:
+    {opt nobreak} changes how the relative ranks are computed in case of ties. By
+    default, {cmd:reldist} breaks ties randomly for comparison values that have
+    ties in the reference distribution (in ascending order of weights, if
+    weights have been specified). This leads to improved results if there is
+    heaping in the data. Specify {cmd:nobreak} to omit breaking ties. Option
+    {cmd:nobreak} has no effect for {cmd:reldist histogram} and {cmd:reldist cdf}.
 
-{phang2}
-    {opt m:ethod(method)} specifies the estimation method to be used. Available
-    methods are {cmd:ipw} (inverse probability weighting), {cmd:eb} (entropy balancing),
-    {cmd:ps} (propensity score matching), {cmd:md} (multivariate distance matching), and
-    {cmd:em} (exact matching). The default is {cmd:method(ipw)}. See {helpb kmatch}
-    for details on the different methods.
+{phang}
+    {opt nomid} changes how the relative ranks are computed in case of ties. By
+    default, {cmd:reldist} uses midpoints of the steps in the cumulative
+    distribution for comparison values that have ties in the
+    reference distribution. This ensures that the average
+    relative rank is equal to 0.5 if the comparison and reference distributions
+    are identical. Specify {cmd:nomid} to assign relative ranks based on full
+    steps in the CDF. Option {cmd:nomid} has no effect
+    for {cmd:reldist histogram} and {cmd:reldist cdf}.
 
-{phang2}
-    {it:{help kmatch:kmatch_options}} are options to be passed through to
-    {helpb kmatch}. Available options depend on the chosen {it:method}.
-
-{phang2}
-    {opt ref:erence} reweights the covariate distribution of the reference group. The
-    default is to reweight the covariate distribution of the comparison group. Option
-    {cmd:pooled} is not allowed with {cmd:balance(, reference)}.
-
-{phang2}
-    {opt cont:rast} compares the balanced distribution with the unbalanced
-    distribution. Use this option to see how the balancing changes the
-    distribution. If {cmd:contrast} is specified together with {cmd:reference},
-    the balanced reference distribution will be used as the comparison
-    distribution. If {cmd:contrast} is specified without {cmd:reference}, the
-    balanced comparison distribution will be used as the reference
-    distribution. Option {cmd:pooled} is not allowed with
-    {cmd:balance(, contrast)}.
-
-{phang2}
-    {opt name(name)} stores the results from {helpb kmatch} under {it:name} using
-    {helpb estimates store}.
-
-{phang2}
-    {opt nowarn} suppresses the warning message that is displayed if not all observations
-    of the relevant target group can be matched due to lack of common support.
-
-{phang2}
-    {opt noi:sily} displays the output from {helpb kmatch}. Specifying {cmd:noisily} twice will
-    display verbose output from {helpb kmatch}.
+{phang}
+    {opt descending} sorts tied observations in descending order of
+    weights. The default is to use ascending sort order. Option
+    {opt descending} has no effect if {cmd:nobreak} is specified or
+    if there are no weights. Furthermore, it has no effect
+    for {cmd:reldist histogram} and {cmd:reldist cdf}.
 
 {marker pdfopts}{...}
 {dlgtab:For subcommand -pdf-}
@@ -483,14 +560,12 @@ help for {hi:reldist}
     probability scale. All outcome values across both distributions will be
     considered. To restrict the evaluation points to outcome values from the
     comparison distribution or from the reference distribution, specify
-    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. As an
-    alternative to using observed outcome values, it is also possible to
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively, 
     specify a grid of custom values, either by providing a
     {help numlist:{it:numlist}} or the name of a matrix containing the values
     (the values will be taken from the first row or the first column of the
     matrix, depending on which is larger). Only one of {cmd:n()}, {cmd:at()},
-    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if
-    {cmd:atx()} is specified (unless {cmd:categorical} is also specified).
+    and {cmd:atx()} is allowed.
 
 {phang}
     {cmd:discrete} causes the data to be treated as discrete. The relative PDF
@@ -500,26 +575,28 @@ help for {hi:reldist}
     will be displayed as a step function. If option {cmd:n()} or {cmd:at()} is
     specified, the step function will be evaluated at the points of the
     corresponding probability grid instead of returning the relative density
-    for each outcome level. Options {cmd:nobreak}, {cmd:nomid} and
+    for each outcome level. Options {cmd:nobreak}, {cmd:nomid}, {cmd:descending}, and
     {help reldist##density_options:{it:density_options}} have no effect if
     {cmd:discrete} is specified. Furthermore, options {cmd:histogram()} and
-    {cmd:adjust()} are not allowed, and option {cmd:vce()} is only allowed if
-    {cmd:n()}, {cmd:at()}, or {cmd:categorical} is specified in addition
-    to {cmd:discrete}.
+    {cmd:adjust()} are not allowed.
 
 {phang}
-    {cmd:categorical} has the same effect as {cmd:discrete}, but requests that
-    the data only contains positive integers and uses factor-variable notation to
+    {cmd:categorical} is like {cmd:discrete}, but additionally requests that
+    the data only contains positive integers. Factor-variable notation will be used to
     label the coefficient in the output table.
 
 {phang}
-    {cmd:histogram}[{cmd:(}{it:#}{cmd:)}] requests that a histogram is computed in
+    {cmd:histogram}[{cmd:(}{it:#}{cmd:)}] computes a histogram in
     addition to the PDF, where {it:#} is the number of bins. If {it:#} is omitted,
     10 bins will be used.
 
+{phang}
+    {cmd:alt} uses an alternative estimation method for the histogram;
+    see {help reldist##histopts:histogram options} below.
+
 {marker density_options}{...}
 {phang}
-    {it:density_options} set the details of the the kernel density estimation. The options
+    {it:density_options} set the details of kernel density estimation. The options
     are as follows:
 
 {marker bwidth}{...}
@@ -530,14 +607,11 @@ help for {hi:reldist}
     type {opt bwidth(method)} to choose an automatic bandwidth selection
     method. Choices are {cmdab:s:ilverman} (optimal of Silverman),
     {cmdab:n:ormalscale} (normal scale rule), {cmdab:o:versmoothed}
-    (oversmoothed rule), {opt sj:pi} (Sheather-Jones plug-in estimate), and
-    {cmdab:d:pi}[{cmd:(}{it:#}{cmd:)}] (a variant of the Sheather-Jones
-    plug-in estimate called the direct plug-in estimate; {it:#}
-    specifies the number of stages of functional estimation and defaults to 2). The default
-    is {cmd:bw(sjpi)}. Note that the bandwidth
-    selectors used by {cmd:reldist} have been modified for the purpose of relative
-    density estimation (that is, they are different from their equivalents in regular
-    density estimation).
+    (oversmoothed rule), {opt sj:pi} (Sheather-Jones solve-the-equation plug-in),
+    {cmdab:d:pi}[{cmd:(}{it:#}{cmd:)}] (Sheather-Jones direct plug-in, where {it:#}
+    specifies the number of stages of functional estimation; default is 2), or
+    {opt isj} (diffusion estimator bandwidth). The default
+    is {cmd:bw(sjpi)}.
 
 {phang2}
     {opt bwadjust(#)} multiplies the bandwidth by
@@ -551,8 +625,8 @@ help for {hi:reldist}
 
 {phang2}
     {opt adaptive(#)} specifies the number of iterations used by the adaptive
-    kernel density estimator. The default is {cmd:adaptive(1)}. Specify
-    {cmd:adaptive(0)} to use a non-adaptive density estimator.
+    kernel density estimator. The default is {cmd:adaptive(0)} (non-adaptive
+    density estimator).
 
 {marker kernel}{...}
 {phang2}
@@ -566,29 +640,17 @@ help for {hi:reldist}
     {opt p:arzen} (Parzen kernel function),
     {opt r:ectangle} (rectangle kernel function)
     or {opt t:riangle} (triangle kernel function). The default is
-    {cmd:kernel(epan2)}.
+    {cmd:kernel(gaussian)}.
 
 {phang2}
     {opt napprox(#)} specifies the grid size used by the binned approximation
     density estimator (and by the data-driven bandwidth selectors). The default
-    is {cmd:napprox(512)}, or the number of evaluation points requested
-    by {cmd:n()}, {cmd:at()}, or {cmd:atx()}, if the latter is larger than
-    the former.
+    is {cmd:napprox(512)}.
 
 {phang2}
     {cmd:exact} causes the exact kernel density estimator to be used instead
     of the binned approximation estimator. The exact estimator can be slow in large
-    datasets. The Kullback-Leibler divergence and the Chi-squared
-    divergence will not be computed if {cmd:exact} is specified.
-
-{phang}
-    {opt cross(matname)} requests that the PDF stored in matrix {it:matname} be
-    used to compute a cross-entropy divergence instead of the regular
-    divergence. Results will only be valid if the PDF in {it:matname} has been
-    obtained for the same evaluation points (on the 0/1 scale) as the current
-    density estimate; it is the user's responsibility to ensure that this is
-    the case. Option {cmd:cross()} is not allowed together with {cmd:categorical} or
-    {cmd:discrete}.
+    datasets, if the density is to be evaluated at many points.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -598,7 +660,7 @@ help for {hi:reldist}
 
 {phang}
     {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid is stored in
+    labels. The default is {cmd:ogrid(401)}. The grid is stored in
     {cmd:e(ogrid)} and will be used by graph option
     {helpb reldist##olabel:olabel()} to determine the positions of outcome
     labels. Type {cmd:noogrid} to omit the computation of the grid (no outcome
@@ -617,10 +679,24 @@ help for {hi:reldist}
     cover 1/{it:#}th of the reference distribution. The default is {cmd:n(10)}.
 
 {phang}
-    {opt cross(matname)} requests that the histogram PDF stored in matrix {it:matname} be
-    used to compute a cross-entropy divergence instead of the regular
-    divergence. The histogram in {it:matname} must have the same number of bins
-    as the current histogram.
+    {cmd:alt} uses an alternative estimation method. The default method obtains
+    the relative histogram by computing the empirical CDFs of both distributions at
+    all values that exist in the data (across both distributions). The
+    alternative method obtains the relative histogram based on the empirical CDF of
+    the relative ranks. In both cases, if necessary, linear interpolation will be used
+    to map the relative CDF to the evaluation points.
+
+{phang}
+    {cmd:discrete} causes the data to be treated as discrete. The relative density
+    will then be evaluated at each level of the data as the ratio of the
+    level's frequency between the two distributions and the width of bars will be
+    proportional to the reference distribution. Option {cmd:alt} has no effect and
+    options {cmd:n()} and {cmd:adjust()} are not allowed if {cmd:discrete} is specified.
+
+{phang}
+    {cmd:categorical} is like {cmd:discrete}, but additionally requests that
+    the data only contains positive integers. Factor-variable notation will be used to
+    label the coefficient in the output table.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -630,10 +706,11 @@ help for {hi:reldist}
 
 {phang}
     {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid is stored in {cmd:e(ogrid)} and
+    labels. The default is {cmd:ogrid(401)}. The grid is stored in {cmd:e(ogrid)} and
     will be used by graph option {helpb reldist##olabel:olabel()} to determine
     the positions of outcome labels. Type {cmd:noogrid} to omit the computation
-    of the grid (no outcome labels will then be available for the graph).
+    of the grid (no outcome labels will then be available for the graph). {cmd:ogrid()}
+    is not allowed together with {cmd:discrete} or {cmd:categorical}.
 
 {marker cdfopts}{...}
 {dlgtab:Subcommand -cdf-}
@@ -663,37 +740,32 @@ help for {hi:reldist}
     probability scale. All outcome values across both distributions will be
     considered. To restrict the evaluation points to outcome values from the
     comparison distribution or from the reference distribution, specify
-    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. As an
-    alternative to using observed outcome values, it is also possible to
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively, 
     specify a grid of custom values, either by providing a
     {help numlist:{it:numlist}} or the name of a matrix containing the values
     (the values will be taken from the first row or the first column of the
     matrix, depending on which is larger). Only one of {cmd:n()}, {cmd:at()},
-    and {cmd:atx()} is allowed. The {cmd:vce()} option is not allowed if
-    {cmd:atx()} is specified (unless {cmd:categorical} is also specified).
+    and {cmd:atx()} is allowed.
+
+{phang}
+    {cmd:alt} uses an alternative estimation method. The default method obtains
+    the relative CDF by computing the empirical CDFs of both distributions at
+    all values that exist in the data (across both distributions). The
+    alternative method obtains the relative CDF based on the empirical CDF of
+    the relative ranks. In both cases, if necessary, linear interpolation will be used
+    to map the relative CDF to the evaluation points.
 
 {phang}
     {cmd:discrete} causes the data to be treated as discrete. The relative CDF
     will then be evaluated at each observed outcome value instead of using an
     evaluation grid on the probability scale. Option {cmd:discrete} leads to the
     same result as specifying {cmd:atx}. Option {cmd:adjust()} is not allowed
-    if {cmd:discrete} is specified. Furthermore, option {cmd:vce()} is only allowed if
-    {cmd:n()}, {cmd:at()}, or {cmd:categorical} is specified in addition
-    to {cmd:discrete}.
+    if {cmd:discrete} is specified.
 
 {phang}
-    {cmd:categorical} has the same effect as {cmd:discrete}, but requests that
-    the data only contains positive integers and uses factor-variable notation to
+    {cmd:categorical} is like {cmd:discrete}, but additionally requests that
+    the data only contains positive integers. Factor-variable notation will be used to
     label the coefficient in the output table.
-
-{phang}
-    {cmd:alt} uses an alternative estimation method. The default method obtains
-    the relative CDF by computing the empirical CDFs of both distributions at
-    all values that exist in the data (across both distributions). The
-    alternative methods obtains the relative CDF based on the empirical CDF of
-    the relative ranks that the values of the comparison distribution take on in the
-    reference distribution. In both cases, if necessary, linear interpolation will then be used
-    to map the relative CDF to the evaluation points.
 
 {phang}
     {opt graph}[{cmd:(}{help reldist##graph_opts:{it:graph_options}}{cmd:)}]
@@ -703,7 +775,7 @@ help for {hi:reldist}
 
 {phang}
     {opt ogrid(#)} sets the size of the approximation grid for outcome
-    labels. The default is {cmd:ogrid(201)}. The grid is stored in
+    labels. The default is {cmd:ogrid(401)}. The grid is stored in
     {cmd:e(ogrid)} and will be used by graph option
     {helpb reldist##olabel:olabel()} to determine the positions of outcome
     labels. Type {cmd:noogrid} to omit the computation of the grid (no outcome
@@ -713,6 +785,67 @@ help for {hi:reldist}
     specific outcome values (e.g. if {cmd:atx()} is specified), the outcome
     labels will be obtained from the information stored in {cmd:e(at)}.
 
+{marker divopts}{...}
+{dlgtab:For subcommand -divergence-}
+
+{phang}
+    {cmd:over(}{help varname:{it:overvar}}{cmd:)} computes results for each subpopulation defined
+    by the values of {it:overvar}.
+
+{phang}
+    {opt entropy} or {opt kl} computes the Kullback-Leibler divergence (entropy) of the
+    relative distribution. This is the default.
+
+{phang}
+    {opt chi2} or {opt chisquared} computes the Chi-squared divergence of the
+    relative distribution.
+
+{phang}
+    {opt tvd} or {opt dissimilarity} computes the dissimilarity index (total variation distance) of the
+    relative distribution.
+
+{phang}
+    {opt all} computes all supported divergence measures. {opt all} is equivalent to
+    {cmd:entropy chi2 tvd}.
+
+{phang}
+    {opt n(#)} specifies the number of histogram bars or, if option {cmd:pdf} is specified, the
+    number of kernel density evaluation points used to estimate the relative distribution. The
+    default is {cmd:n(20)} or, if option {cmd:pdf} is specified, {cmd:n(100)}.
+
+{phang}
+    {cmd:alt} uses an alternative estimation method for the histogram density;
+    see {help reldist##histopts:histogram options} above.
+
+{phang}
+    {opt pdf} computes the divergence measures based on a kernel density estimate instead of a
+    histogram estimate.
+
+{phang}
+    {it:density_options} set the details of the the kernel density estimation. This is
+    only relevant if option {cmd:pdf} is specified. See {help reldist##density_options:{it:density_options}}
+    above for available options.
+
+{phang}
+    {cmd:discrete} causes the data to be treated as discrete. The relative density
+    will then be evaluated at each level of the data as the ratio of the
+    level's frequency between the two distributions. Option {cmd:alt} has no effect and
+    options {cmd:n()}, {cmd:pdf}, and {cmd:adjust()} are not allowed if {cmd:discrete} is specified.
+
+{phang}
+    {cmd:categorical} is like {cmd:discrete}, but additionally requests that
+    the data only contains positive integers.
+
+{marker divcom}{...}
+{phang}
+    {cmd:compare}[{cmd:(}{it:options}{cmd:)}] estimates divergence measures for
+    two models of the relative distribution, a main model and an alternative model,
+    and also reports the difference between the two variants. {it:options} are
+    {helpb reldist##balance:balance()} and {helpb reldist##adjust:adjust()} as described
+    above. {cmd:balance()} and {cmd:adjust()} specified as main options are applied
+    to the main model; {cmd:balance()} and {cmd:adjust()} specified within
+    {cmd:compare()} are applied to the alternative model.
+
 {marker mrpopts}{...}
 {dlgtab:For subcommand -mrp-}
 
@@ -721,8 +854,8 @@ help for {hi:reldist}
     by the values of {it:overvar}.
 
 {phang}
-    {opt multiplicative} applies a multiplicative location adjustment. The
-    default is to use an additive adjustment. Only one of
+    {opt multiplicative} applies multiplicative location adjustment. The
+    default is to use additive adjustment. Only one of
     {cmd:logarithmic} and {cmd:multiplicative} is allowed.
 
 {phang}
@@ -733,16 +866,10 @@ help for {hi:reldist}
 {phang}
     {opt scale}[{cmd:(sd)}] adjusts the scale of the data before
     computing the polarization indices. If {cmd:scale} is specified without argument,
-    the IQR (interquartile range) is used; that is, the scale of the data in the
-    comparison group/variable is adjusted such that the IQR is the same as in the
-    reference group/variable. Specify
-    {cmd:scale(sd)} to use the standard deviation instead of the IQR. {cmd:scale}
+    the IQR (interquartile range) will be used; that is, the scale of the data will be
+    adjusted such that the IQR is the same in both distributions. Specify
+    {cmd:scale(sd)} to use the standard deviation instead of the IQR. {cmd:scale()}
     is not allowed if {cmd:multiplicative} is specified.
-
-{phang}
-    {opt reference} causes the reference distribution to be adjusted. The default
-    is to adjust the comparison distribution. {cmd:reference} should only have an
-    effect on the results if option {cmd:logarithmic} has been specified.
 
 {marker sumopts}{...}
 {dlgtab:For subcommand -summarize-}
@@ -751,13 +878,22 @@ help for {hi:reldist}
     {cmd:over(}{help varname:{it:overvar}}{cmd:)} computes results for each subpopulation defined
     by the values of {it:overvar}.
 
+{marker statistics}{...}
 {phang}
-    {cmd:statistics(}{help tabstat##statname:{it:statnames}}{cmd:)} selects the
-    summary statistics to be reported. All statistics supported by {helpb tabstat}
-    are allowed. The default is {cmd:statistics(mean)}.
+    {cmd:statistics(}{it:statname} [{it:...}]{cmd:)} specifies a space separated list of
+    summary statistics to be reported. The default is {cmd:statistics(mean)}. The
+    following summary statistics are supported:
+
+{p2colset 13 25 27 2}{...}
+{p2col:{opt m:ean}}mean{p_end}
+{p2col:{opt v:ariance}}variance{p_end}
+{p2col:{opt sd}}standard deviation{p_end}
+{p2col:{opt med:ian}}median; equivalent to {cmd:p50}{p_end}
+{p2col:{opt p}{it:#}}{it:#}th percentile, where {it:#} is an integer between 1 and 99{p_end}
+{p2col:{opt iqr}}interquartile range ({cmd:p75}-{cmd:p25}){p_end}
 
 {phang}
-    {opth generate(newvar)} stores the relative ranks (based on adjusted data) in
+    {opth generate(newvar)} stores the relative ranks in
     variable {it:newvar}. Depending on {cmd:adjust()}, different observations
     may be filled in.
 
@@ -777,34 +913,58 @@ help for {hi:reldist}
     {opth vce(vcetype)} determines how standard errors and confidence intervals
     are computed. {it:vcetype} may be:
 
-            {cmd:bootstrap} [{cmd:,} {help bootstrap:{it:bootstrap_options}}]
-            {cmd:jackknife} [{cmd:,} {help jackknife:{it:jackknife_options}}]
+            {cmdab:a:nalytic} [{cmd:,} {help reldist##density_options:{it:density_options}}]
+            {cmdab:cl:uster} {it:clustvar} [{cmd:,} {help reldist##density_options:{it:density_options}}]
+            {cmdab:svy} [{help svy##svy_vcetype:{it:svy_vcetype}}] [{cmd:,} {help svy##svy_options:{it:svy_options}} {help reldist##density_options:{it:density_options}}]
+            {cmdab:boot:strap} [{cmd:,} {help bootstrap:{it:bootstrap_options}}]
+            {cmdab:jack:knife} [{cmd:,} {help jackknife:{it:jackknife_options}}]
 
 {pmore}
-    By default, {cmd:reldist pdf} computes standard errors for the density estimates
-    using analytic formulas. These standard errors may not be reliable in all
-    situations and it may be better to resort to
-    {cmd:bootstrap} or {cmd:jackknife}. Note that {cmd:reldist} also allows
-    replication-based survey estimation using the {helpb svy} prefix,
-    e.g. {cmd:svy brr}.
+    The default is {cmd:vce(analytic)}, which computes the standard errors based
+    on influence functions. Likewise, {bind:{cmd:vce(cluster} {it:clustvar}{cmd:)}} computes
+    influence-function based standard errors allowing for intragroup correlation,
+    where {it:clustvar} specifies to which group each observation
+    belongs. In both cases, {help reldist##density_options:{it:density_options}} specify the details
+    of density estimation employed during the computation of the influence functions.
 
 {pmore}
-    All other subcommands do not compute standard errors by
-    default.
+    {cmd:vce(svy)} computes standard errors taking the survey design as set by
+    {helpb svyset} into account. The syntax is equivalent the syntax of the {helpb svy}
+    prefix command; that is, {cmd:vce(svy)} is {cmd:reldist}'s way to support
+    the {helpb svy} prefix. If {help svy##svy_vcetype:{it:svy_vcetype}} is set to {cmd:linearized}, the
+    standard errors are estimated based on influence functions; use
+    {help reldist##density_options:{it:density_options}} to specify the details
+    of density estimation in this case. For
+    {help svy##svy_vcetype:{it:svy_vcetype}} other than {cmd:linearized}, {it:density_options}
+    are not allowed.
 
 {pmore}
-    In case of density estimation with automatic bandwidth selection,
-    the bandwidth is held fixed across bootstrap or jackknife
-    replications invoked by {cmd:vce()}. If you want to repeat bandwidth
-    search in each replication, use the {helpb bootstrap} or {helpb jackknife}
-    prefix command.
+    {cmd:vce(bootstrap)} and {cmd:vce(jackknife)} compute standard errors using
+    {helpb bootstrap} or {helpb jackknife}, respectively; see help {it:{help vce_option}}.
+
+{pmore}
+    If a replication technique is used for standard error estimation,
+    i.e. {cmd:vce(bootstrap)}, {cmd:vce(jackknife)}, {cmd:vce(svy)} with
+    {help svy##svy_vcetype:{it:svy_vcetype}} other than {cmd:linearized},
+    the bandwidth used by {cmd:reldist pdf} will be held fixed across
+    replications (that is, if relevant, the bandwidth will be determined upfront
+    and then held constant). If you want to repeat bandwidth
+    search in each replication, use {helpb bootstrap}, {helpb jackknife}, or {helpb svy}
+    as a prefix command.
 
 {phang}
-    {opt nose} prevents {cmd:reldist pdf} from computing standard errors for the
-    density estimates. This may save some computer time.
+    {opt nose} prevents {cmd:reldist} from computing standard errors. This saves computer time.
 
 {marker reprtopts}{...}
 {dlgtab:Reporting}
+
+{phang}
+    {opt citransform} reports transformed confidence intervals
+    depending on the type of the reported statistics (log
+    transform for PDF and histogram density, logit transform for CDF and
+    descriptive statistics, inverse hyperbolic tangent transform for
+    polarization indices). {opt citransform} only has an effect in Stata 15 or
+    newer.
 
 {phang}
     {opt noheader} suppress the output header.
@@ -815,7 +975,7 @@ help for {hi:reldist}
 
 {marker display_opts}{...}
 {phang}
-    {it: display_options} are standard reporting options such as {cmd:cformat()} or
+    {it:display_options} are standard reporting options such as {cmd:cformat()} or
     {cmd:coeflegend}; see the Reporting options
     in {helpb estimation options:[R] Estimation options}.
 
@@ -827,7 +987,7 @@ help for {hi:reldist}
 
 {phang}
     {opt refline(line_options)} specifies options to affect
-    the rendition of parity line. See help {it:{help line_options}}.
+    the rendition of the parity line. See help {it:{help line_options}}.
 
 {phang}
     {opt norefline} suppresses the parity  line.
@@ -839,7 +999,7 @@ help for {hi:reldist}
     help {it:{help cline_options}}.
 
 {phang}
-    {opt hist:opts(options)} specifies options to affect the
+    {opt histopts(options)} specifies options to affect the
     rendition of the histogram bars (if a histogram was computed) and the
     corresponding confidence spikes. {it:options} are as follows:
 
@@ -849,8 +1009,7 @@ help for {hi:reldist}
 
 {phang2}
     {opt ciopts(rcap_options)} specifies options to affect the
-    rendition of the confidence spikes of the histogram bars (if
-    histogram standard errors were computed). See help
+    rendition of the confidence spikes of the histogram bars. See help
     {it:{help rcap_options}}.
 
 {phang2}
@@ -869,7 +1028,7 @@ help for {hi:reldist}
 
 {phang}
     {opt noorigin} prevents adding a (0,0) coordinate to the plotted
-    line. If the first Y-coordinate of the CDF is larger
+    line. If the first X-coordinate of the CDF is larger
     than zero and the range of the CDF has not been restricted by {cmd:at()} or
     {cmd:atx()}, {cmd:reldist graph} will automatically add a
     (0,0) coordinate to the plot. Type {opt noorigin}
@@ -883,12 +1042,17 @@ help for {hi:reldist}
 
 {phang}
     {opt level(#)} specifies the confidence level, as a percentage, for
-    confidence intervals. The default level is as set during estimation.
+    confidence intervals.
+
+{phang}
+    {opt citransform} plots transformed confidence intervals
+    depending on the type of the reported statistics (log
+    transform for PDF and histogram density, logit transform for CDF).
 
 {phang}
     {opt ci(name)} obtains the confidence intervals from
-    {cmd:e(}{it:name}{cmd:)} instead of computing them from {cmd:e(V)} or
-    {cmd:e(se)}. {cmd:e(}{it:name}{cmd:)} must contain two rows and
+    {cmd:e(}{it:name}{cmd:)} instead of computing them from
+    {cmd:e(V)}. {cmd:e(}{it:name}{cmd:)} must contain two rows and
     the same number of columns as {cmd:e(b)}. For example, after
     bootstrap estimation, you could use {cmd:ci(ci_percentile)} to plot
     percentile confidence intervals. {cmd:ci()} and
@@ -915,8 +1079,9 @@ help for {hi:reldist}
     {cmd:reldist cdf}). The syntax of {it:spec} is
 
 {p 12 17 2}
-        [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,} {c -(}{cmd:noprune}|{opt prune(mindist)}{c )-}
-        {opth for:mat(%fmt)} {it:suboptions} ]
+        [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,}
+        {c -(} {cmd:noprune} | {opt prune(mindist)} {c )-}
+        {cmd:at} {opth for:mat(%fmt)} {it:suboptions} ]
 
 {phang2}
     {cmd:#}{it:#} requests that (approximately) {it:#} outcome labels be
@@ -936,7 +1101,11 @@ help for {hi:reldist}
     position.
 
 {phang2}
-    {opt format(%fmt)} specified the display format for the outcome labels. Default
+    {cmd:at} causes {it:numlist} to interpreted as a list of probabilities for which
+    outcome labels are to be determined. Labels obtained this way will not be pruned.
+
+{phang2}
+    {opt format(%fmt)} specifies the display format for the outcome labels. Default
     is {cmd:format(%6.0g)}. See help {helpb format} for available formats.
 
 {phang2}
@@ -987,7 +1156,7 @@ help for {hi:reldist}
 
 {pstd}
     Technical note: The positions of the outcome labels, ticks, or lines are
-    computed from the information stored by {cmd:reldist} in {cmd:e()}, either
+    computed from information stored by {cmd:reldist} in {cmd:e()}, either
     from the quantiles stored in {cmd:e(ogrid)} or from the values stored
     in {cmd:e(at)}, depending on context. There is an undocumented command
     called {cmd:reldist olabel} that can be
@@ -998,13 +1167,14 @@ help for {hi:reldist}
 
 {p 8 17 2}
     {cmd:reldist} {opt olab:el} [ {cmd:#}{it:#} | {it:{help numlist}} ] [{cmd:,}
-        {opth for:mat(%fmt)} {c -(}{cmd:noprune}|{opt prune(cutoff)}{c )-}
+        {c -(} {cmd:noprune} | {opt prune(mindist)} {c )-} {cmd:at} {opth for:mat(%fmt)}
         {opth tic:k(numlist)} {opth li:ne(numlist)} {opt y} ]
 
 {pstd}
-    where {cmd:#}{it:#} or {it:numlist} specifies the (number of) values for which labels be generated,
-    {cmd:format()} specifies the display format for the labels, {cmd:prune()} determines the
-    pruning (see above), {cmd:tick()}
+    where {cmd:#}{it:#} or {it:numlist} specifies the (number of) values for
+    which labels be generated, {cmd:prune()} determines the
+    pruning (see above), {cmd:at} changes the meaning of the main {it:numlist} (see above),
+    {cmd:format()} specifies the display format for the labels, {cmd:tick()}
     specifies values for which ticks be generated, {cmd:line()}
     specifies values for which added lines be generated, and {cmd:y} request outcome labels
     for the Y axis of the relative CDF (only allowed after
@@ -1065,9 +1235,9 @@ help for {hi:reldist}
 
 {pstd}
     By default, labels that are close together will not be printed. Type
-    {cmd:olabel(1(1)40, noprune)} print all 40 labels. Alternatively use suboption
+    {cmd:olabel(1(1)40, noprune)} to print all 40 labels. Alternatively use suboption
     {cmd:prune()} to set the minimum distance between labels
-    (default {cmd:prune(0.1)}). Example:
+    (default is {cmd:prune(0.1)}). Example:
 
 {p 8 12 2}
         . {stata reldist graph, olabel(1(1)40, prune(0.04)) otitle(hourly wage)}
@@ -1076,16 +1246,12 @@ help for {hi:reldist}
     To include a histogram in addition to the density curve, type:
 
 {p 8 12 2}
-        . {stata reldist pdf wage, by(union) histogram notable}
-        {p_end}
-{p 8 12 2}
-        . {stata reldist graph, ciopts(recast(rline) lp(dash) pstyle(p1))}
+        . {stata reldist pdf wage, by(union) histogram graph(ciopts(fc(%50) lc(%0)))}
 
 {pstd}
     Or, to display only the histogram:
 
-        . {stata reldist histogram wage, by(union) vce(bootstrap, reps(100))}
-        . {stata reldist graph}
+        . {stata reldist histogram wage, by(union) graph}
 
 {pstd}
     Since unionized workers have, on average, higher wages than non-unionized workers,
@@ -1094,10 +1260,7 @@ help for {hi:reldist}
     difference in location:
 
 {p 8 12 2}
-        . {stata reldist pdf wage, by(union) adjust(location) notable}
-        {p_end}
-{p 8 12 2}
-        . {stata reldist graph, ciopts(recast(rline) lp(dash) pstyle(p1))}
+        . {stata reldist pdf wage, by(union) adjust(location) graph(ciopts(fc(%50) lc(%0)))}
 
 {pstd}
     Interestingly, the distribution among unionized workers appears more polarized, at
@@ -1105,14 +1268,11 @@ help for {hi:reldist}
     misleading result because, by default, {cmd:reldist} performs an
     additive location shift (pushing low-wage earners among the unionized
     to the very bottom of the distribution). Since wages can only be positive,
-    it probably makes more sense to use a multiplicative shift (i.e., rescale the
+    it probably makes more sense to use a multiplicative shift (i.e., to rescale the
     wages proportionally):
 
 {p 8 12 2}
-        . {stata reldist pdf wage, by(union) adjust(location, multiplicative) notable}
-        {p_end}
-{p 8 12 2}
-        . {stata reldist graph, ciopts(recast(rline) lp(dash) pstyle(p1))}
+        . {stata reldist pdf wage, by(union) adjust(location, multiplicative) graph(ciopts(fc(%50) lc(%0)))}
 
 {pstd}
     We now see that the distribution among the unionized is less polarized than the
@@ -1126,14 +1286,14 @@ help for {hi:reldist}
 
         . {stata sysuse nlsw88, clear}
 {p 8 12 2}
-        . {stata reldist cdf wage, by(union) graph(olab(1(1)40) yolab(1(1)40) aspectratio(1))}
+        . {stata reldist cdf wage, by(union) nose graph(olab(1(1)40) yolab(1(1)40) aspectratio(1))}
 
 {pstd}
     After applying a multiplicative location shift, the relative distribution
     looks as follows:
 
 {p 8 12 2}
-        . {stata reldist cdf wage, by(union) adjust(location, multiplicative) graph}
+        . {stata reldist cdf wage, by(union) nose adjust(location, multiplicative) graph}
 
 {dlgtab:Median relative polarization}
 
@@ -1143,17 +1303,17 @@ help for {hi:reldist}
 
         . {stata sysuse nlsw88, clear}
 {p 8 12 2}
-        . {stata reldist mrp wage, by(union) over(collgrad) vce(bootstrap, reps(100))}
+        . {stata reldist mrp wage, by(union) over(collgrad)}
 
 {pstd}
     It appears that wage polarization is more pronounced among unionized workers than among the
     non-unionized workers in the group of people without college degree. In the group of
     people with college degree, polarization is higher among non-unionized workers. Again, this might
     be an artifact due to the default additive location adjustment imposed by the MRP. A multiplicative
-    adjustment (i.e. rescaling wages proportionally) makes more sense:
+    adjustment (i.e. rescaling wages proportionally) probably makes more sense:
 
 {p 8 12 2}
-        . {stata reldist mrp wage, by(union) over(collgrad) multiplicative vce(bootstrap, reps(100))}
+        . {stata reldist mrp wage, by(union) over(collgrad) multiplicative}
 
 {pstd}
     We now see that polarization is generally larger among the non-unionized workers, but there
@@ -1170,7 +1330,7 @@ help for {hi:reldist}
 
         . {stata sysuse nlsw88, clear}
 {p 8 12 2}
-        . {stata reldist summarize wage, by(union) over(collgrad) stat(mean median) vce(bootstrap, reps(100))}
+        . {stata reldist summarize wage, by(union) over(collgrad) stat(mean median)}
         {p_end}
 
 {pstd}
@@ -1193,7 +1353,7 @@ help for {hi:reldist}
     polarized than in 1978, which might be due to an age effect or a general increase
     in wage inequality. The result is confirmed by the MRP:
 
-        . {stata reldist mrp ln_wage88 ln_wage78, vce(bootstrap, reps(100))}
+        . {stata reldist mrp ln_wage88 ln_wage78}
 
 {dlgtab:Covariate balancing}
 
@@ -1216,13 +1376,12 @@ help for {hi:reldist}
 
 {pstd}
     We see that balancing the specified covariances makes the wage distribution between
-    unionized and non-unionized workers somewhat more similar, but not very much.
+    unionized and non-unionized workers somewhat more equal, but not very much.
 
 {pstd}
     By default, inverse-probability weighting is used to balance the
-    covariates. However, you may also use more sophisticated methods such as
-    entropy balancing or nearest-neighbor matching; see the {helpb reldist##balance:balance()}
-    option above.
+    covariates. See the {helpb reldist##balance:balance()}
+    option above for alternatives.
 
 {dlgtab:Location and shape decompositions}
 
@@ -1307,27 +1466,8 @@ help for {hi:reldist}
 {title:Methods and formulas}
 
 {pstd}
-    For methodological details on the relative distribution see
-    Handcock and Morris (1999). The relative density is estimated by
-    kernel density methods; see
-    {browse "http://boris.unibe.ch/69421/2/kdens.pdf":Jann (2007)}. The statistics
-    labeled "Divergence", "Chi-squared", and "Dissimilarity" in the output of
-    {cmd:reldist pdf} are estimates of the Kullback-Leibler divergence
-
-        {it:D} = int_0^1 {it:g}({it:r}) ln({it:g}({it:r})) d{it:r}
-
-{pstd}
-    the Chi-squared divergence
-
-        {it:Chi2} = int_0^1 ({it:g}({it:r}) - 1)^2 d{it:r}
-
-{pstd}
-    and the dissimilarity index (total variation distance)
-
-        {it:T} = int_0^1 |{it:g}({it:r}) - 1|/2 d{it:r}
-
-{pstd}
-    where where {it:g}({it:r}) is the relative density.
+    Methods and formulas used by {cmd:reldist} are described in
+    {browse "http://ideas.repec.org/p/bss/wpaper/37.html":Jann (2020)}.
 
 
 {marker saved_results}{...}
@@ -1343,60 +1483,68 @@ help for {hi:reldist}
 {synopt:{cmd:e(N0)}}number of observations in reference group (syntax 1 only){p_end}
 {synopt:{cmd:e(by1)}}value of comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(by0)}}value of reference group (syntax 1 only){p_end}
-{synopt:{cmd:e(Nout)}}number of unmatched observations (if {cmd:balance()} has been specified){p_end}
 {synopt:{cmd:e(N_over)}}number over-groups (if {cmd:over()} has been specified){p_end}
-{synopt:{cmd:e(n)}}number of evaluation points ({cmd:pdf} and {cmd:cdf} only){p_end}
-{synopt:{cmd:e(bwidth)}}bandwidth of kernel ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(bwadjust)}}bandwidth adjustment factor ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(adaptive)}}number of iterations of adaptive estimator ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(napprox)}}size of approximation grid ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(entropy)}}value of Kullback-Leibler divergence ({cmd:pdf} and {cmd:histogram} only){p_end}
-{synopt:{cmd:e(chi2)}}value of Chi-squared divergence ({cmd:pdf} and {cmd:histogram} only){p_end}
-{synopt:{cmd:e(dissim)}}value of dissimilarity index ({cmd:pdf} and {cmd:histogram} only){p_end}
-{synopt:{cmd:e(n_hist)}}number of histogram bins ({cmd:pdf} and {cmd:histogram} only){p_end}
+{synopt:{cmd:e(n)}}number of evaluation points ({cmd:pdf}, {cmd:cdf}, and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(bwidth)}}bandwidth of kernel density estimator ({cmd:pdf} only){p_end}
+{synopt:{cmd:e(bwadjust)}}bandwidth adjustment factor ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(adaptive)}}number of iterations of adaptive estimator ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(napprox)}}size of approximation grid ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(n_hist)}}number of histogram bins ({cmd:pdf}, {cmd:histogram}, and {cmd:divergence} only){p_end}
 {synopt:{cmd:e(hwidth)}}width of histogram bins ({cmd:pdf} and {cmd:histogram} only){p_end}
-{synopt:{cmd:e(k_omit)}}number of omitted estimates{p_end}
-{synopt:{cmd:e(level)}}confidence level{p_end}
 
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:reldist}{p_end}
-{synopt:{cmd:e(subcmd)}}{cmd:pdf}, {cmd:histogram}, {cmd:cdf}, {cmd:mrp}, or {cmd:summarize}{p_end}
+{synopt:{cmd:e(subcmd)}}{cmd:pdf}, {cmd:histogram}, {cmd:cdf}, {cmd:divergence}, {cmd:mrp}, or {cmd:summarize}{p_end}
 {synopt:{cmd:e(cmdline)}}command as typed{p_end}
 {synopt:{cmd:e(depvar)}}name of dependent variable{p_end}
 {synopt:{cmd:e(by)}}name of {it:groupvar} (syntax 1 only){p_end}
 {synopt:{cmd:e(by1lab)}}label of comparison group (syntax 1 only){p_end}
 {synopt:{cmd:e(by0lab)}}label of reference group (syntax 1 only){p_end}
+{synopt:{cmd:e(swap)}}{cmd:swap} or empty (syntax 1 only){p_end}
+{synopt:{cmd:e(pooled)}}{cmd:pooled} or empty{p_end}
 {synopt:{cmd:e(refvar)}}name of {it:refvar} (syntax 2 only){p_end}
 {synopt:{cmd:e(nobreak)}}{cmd:nobreak} or empty{p_end}
 {synopt:{cmd:e(nomid)}}{cmd:nomid} or empty{p_end}
 {synopt:{cmd:e(descending)}}{cmd:descending} or empty{p_end}
+{synopt:{cmd:e(atopt)}}contents of {cmd:at()} option{p_end}
 {synopt:{cmd:e(atx)}}{cmd:atx}, {cmd:comparison}, {cmd:reference} or empty{p_end}
+{synopt:{cmd:e(atxopt)}}contents of {cmd:atx()} option{p_end}
 {synopt:{cmd:e(discrete)}}{cmd:discrete} or empty{p_end}
 {synopt:{cmd:e(categorical)}}{cmd:categorical} or empty{p_end}
 {synopt:{cmd:e(alt)}}{cmd:alt} or empty{p_end}
 {synopt:{cmd:e(origin)}}{cmd:origin} or empty{p_end}
-{synopt:{cmd:e(pooled)}}{cmd:pooled} or empty{p_end}
 {synopt:{cmd:e(adjust)}}list of comparison distribution adjustments{p_end}
 {synopt:{cmd:e(refadjust)}}list of reference distribution adjustments{p_end}
 {synopt:{cmd:e(adjmean)}}{cmd:mean} or empty{p_end}
 {synopt:{cmd:e(adjsd)}}{cmd:sd} or empty{p_end}
 {synopt:{cmd:e(adjlog)}}{cmd:logarithmic} or empty{p_end}
 {synopt:{cmd:e(adjmult)}}{cmd:multiplicative} or empty{p_end}
+{synopt:{cmd:e(c_adjust)}}list of alternate comparison distribution adjustments ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_refadjust)}}list of alternate reference distribution adjustments ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_adjmean)}}{cmd:mean} or empty ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_adjsd)}}{cmd:sd} or empty ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_adjlog)}}{cmd:logarithmic} or empty ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_adjmult)}}{cmd:multiplicative} or empty ({cmd:divergence} only){p_end}
 {synopt:{cmd:e(balance)}}list of balancing variables{p_end}
 {synopt:{cmd:e(balmethod)}}balancing method{p_end}
 {synopt:{cmd:e(balref)}}{cmd:reference} or empty{p_end}
 {synopt:{cmd:e(balcontrast)}}{cmd:contrast} or empty{p_end}
 {synopt:{cmd:e(balopts)}}options passed through to {cmd:kmatch}{p_end}
+{synopt:{cmd:e(compare)}}{cmd:compare} or empty{p_end}
+{synopt:{cmd:e(c_balance)}}list of alternate balancing variables ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_balmethod)}}alternate balancing method ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_balref)}}{cmd:reference} or empty ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_balopts)}}alternate options passed through to {cmd:kmatch} ({cmd:divergence} only){p_end}
 {synopt:{cmd:e(over)}}name of {it:overvar}{p_end}
 {synopt:{cmd:e(over_namelist)}}values of over variable{p_end}
 {synopt:{cmd:e(over_labels)}}values of over variable{p_end}
-{synopt:{cmd:e(boundary)}}boundary correction method ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(bwmethod)}}bandwidth selection method ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(kernel)}}kernel function ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(exact)}}{cmd:exact} or empty ({cmd:pdf} only){p_end}
-{synopt:{cmd:e(cross)}}{cmd:cross} or empty ({cmd:pdf} and {cmd:histogram} only){p_end}
-{synopt:{cmd:e(statistics)}}names of reported statistics ({cmd:summarize} only){p_end}
+{synopt:{cmd:e(pdf)}}{cmd:pdf} or empty ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(boundary)}}boundary correction method ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(bwmethod)}}bandwidth selection method ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(kernel)}}kernel function ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(exact)}}{cmd:exact} or empty ({cmd:pdf} and {cmd:divergence} only){p_end}
+{synopt:{cmd:e(statistics)}}names of reported statistics ({cmd:summarize} and {cmd:divergence} only){p_end}
 {synopt:{cmd:e(generate)}}name of generated variable ({cmd:summarize} only){p_end}
 {synopt:{cmd:e(wtype)}}weight type{p_end}
 {synopt:{cmd:e(wexp)}}weight expression{p_end}
@@ -1406,12 +1554,13 @@ help for {hi:reldist}
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Matrices}{p_end}
 {synopt:{cmd:e(b)}}estimates{p_end}
-{synopt:{cmd:e(se)}}standard errors ({cmd:pdf} only){p_end}
+{synopt:{cmd:e(V)}}variance-covariance matrix of estimates{p_end}
 {synopt:{cmd:e(at)}}evaluation points ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
 {synopt:{cmd:e(ogrid)}}outcome label approximation grid ({cmd:pdf}, {cmd:histogram}, and {cmd:cdf} only){p_end}
-{synopt:{cmd:e(_N)}}numbers of obs per over-group (if {cmd:over()} had been specified){p_end}
-{synopt:{cmd:e(_N1)}}numbers of obs per over-group in comparison group (syntax 1 only){p_end}
-{synopt:{cmd:e(_N0)}}numbers of obs per over-group in reference group (syntax 1 only){p_end}
+{synopt:{cmd:e(bwidth)}}bandwidths of kernel density estimators ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(_N)}}number of obs per over-group (if {cmd:over()} had been specified){p_end}
+{synopt:{cmd:e(_N1)}}number of obs per over-group in comparison group (syntax 1 only){p_end}
+{synopt:{cmd:e(_N0)}}number of obs per over-group in reference group (syntax 1 only){p_end}
 
 {synoptset 20 tabbed}{...}
 {p2col 5 20 24 2: Functions}{p_end}
@@ -1419,8 +1568,9 @@ help for {hi:reldist}
 {p2colreset}{...}
 
 {pstd}
-    If {cmd:vce()} is {cmd:bootstrap} or {cmd:jackknife}, additional results as described
-    in help {helpb bootstrap} and {helpb jackknife} are stored in {cmd:e()}.
+    If {cmd:vce()} is {cmd:svy}, {cmd:bootstrap}, or {cmd:jackknife}, additional
+    results are stored in {cmd:e()}; see {helpb svy}, {helpb bootstrap}, and
+    {helpb jackknife}, respectively.
 
 
 {marker references}{...}
@@ -1435,8 +1585,9 @@ help for {hi:reldist}
     in the Social Sciences. New York: Springer.
     {p_end}
 {phang}
-    Jann, B. (2007). Univariate kernel density
-    estimation. DOI: {browse "http://boris.unibe.ch/69421/2/kdens.pdf":10.7892/boris.69421}.
+    Jann, B. (2020). Relative distribution analysis in Stata.  University of
+    Bern Social Sciences Working Papers 37. Available from
+    {browse "http://ideas.repec.org/p/bss/wpaper/37.html"}.
     {p_end}
 
 
@@ -1458,5 +1609,5 @@ help for {hi:reldist}
 {title:Also see}
 
 {psee}
-    Online: help for {helpb cumul}, {helpb kmatch}, {helpb kdens}, {helpb moremata}
+    Online: help for {helpb cumul}, {helpb kmatch}, {helpb moremata}
 

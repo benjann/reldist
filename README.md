@@ -12,28 +12,51 @@ of the relative distribution, or the relative distribution function (relative
 CDF). Furthermore, it computes relative polarization indices as well as
 descriptive statistics of the relative data, and supports the decomposition of
 the relative distribution by adjusting for location, scale, and shape
-differences or for differences in covariate distributions.
+differences or for differences in covariate distributions. Statistical inference
+is implemented in terms of influence functions and supports estimation for
+complex samples.
 
 To install `reldist` from the SSC Archive, type
 
     . ssc install reldist, replace
 
-in Stata. Stata version 12 or newer is required. Furthermore, the `moremata`, `kdens`,
-and `kmatch` packages are required. To install these packages from the SSC Archive, type
+in Stata. Stata version 12 or newer is required. Furthermore, the `moremata` 
+package is required. To install `moremata` from the SSC Archive, type
 
     . ssc install moremata, replace
-    . ssc install kdens, replace
-    . ssc install kmatch, replace
 
 ---
 
 Installation from GitHub:
 
     . net install reldist, replace from(https://raw.githubusercontent.com/benjann/reldist/master/)
+    . net install moremata, replace from(https://raw.githubusercontent.com/benjann/moremata/master/)
 
 ---
 
 Main changes:
+
+    18sep2020 (version 1.2.0)
+    - major update with many changes:
+      o analytic standard errors are now computed for all estimates (based on 
+        influence functions)
+      o svy is supported through option vce(svy ...)
+      o new -reldist divergence- command for estimation of divergence measures; 
+        -reldist pdf- and -reldist histogram- no longer compute divergence
+      o predict after -reldist- now computed influence functions
+      o density estimation now based on moremata's new mm_density()
+      o balance() option no longer relies on -kmatch-; supported reweighting 
+        methods are IPW and entropy balancing
+      o default kernel now "gaussian", leading to smoother results for the PDF
+      o now using non-adaptive kernel estimation by default
+      o -reldist histogram- now implemented in terms of CDF (or PDF, depending on 
+        situation)
+      o -reldist summarize- no longer calls -tabstat-; list of supported statistics
+        changed
+      o option pooled now only allowed in syntax 1
+      o option cross() discarded
+      o aweights no longer allowed; iweights now treated like pweights
+      o and various other changes ...
 
     17jun2020 (version 1.1.8):
     - [y]obael() now prunes labels that are too close together; new suboptions 
