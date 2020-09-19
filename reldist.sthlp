@@ -411,7 +411,7 @@ help for {hi:reldist}{...}
     {cmd:pooled} is not allowed with {cmd:balance(, reference)}.
 
 {phang2}
-    {opt cont:rast} compares the balanced distribution with the unbalanced
+    {opt cont:rast} compares the balanced distribution with to the unbalanced
     distribution. Use this option to see how the balancing changes the
     distribution. If {cmd:contrast} is specified together with {cmd:reference},
     the balanced reference distribution will be used as the comparison
