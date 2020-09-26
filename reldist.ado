@@ -1,4 +1,4 @@
-*! version 1.2.0  18sep2020  Ben Jann
+*! version 1.2.1  26sep2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -1704,7 +1704,7 @@ program Parse_balance
     // parse "varlist [, options]"
     local 0 `"`lhs'`0'"'
     capt n syntax varlist(fv) [, CONTrast NOIsily REFerence ///
-        GENerate(name) Replace * ]
+        GENerate(name) * ]
     if _rc==1 exit _rc
     if _rc {
         di as err "error in option {bf:balance()}"
@@ -1721,146 +1721,16 @@ program Parse_balance
     c_local bal_noisily  `noisily'
     c_local bal_ref      `reference'
     c_local bal_contrast `contrast'
-    c_local bal_opts     `options'
+    c_local bal_opts     `"`options'"'
     c_local bal_wvar     `generate'
-end
-
-program Balance
-    args pooled touse by by1 by0 wtype wvar over overlevels wb ///
-        varlist method ref noisily opts
-    if "`noisily'"=="" {
-        di as txt "(obtaining balancing weights)"
-    }
-    // treatment variable
-    if "`ref'"!="" local tval `by1' // reweight reference group
-    else           local tval `by0' // reweight comparison group
-    tempvar tvar
-    qui gen byte `tvar' = (`by'==`tval') if `touse'
-    // entropy balancing: handle factor variables
     if "`method'"=="eb" {
-        // - expand factor variables
-        fvexpand `varlist' if `touse'
-        local xxvars
-        foreach v in `r(varlist)' {
-            if strpos(`"`v'"', "b.") continue // remove base levels
-            if strpos(`"`v'"', "o.") continue // remove omitted
-            local xxvars `xxvars' `v'
-        }
-        // - generate temvars for expanded factor variables
-        local xvars
-        foreach v of local xxvars {
-            capt confirm variable `v', exact
-            if _rc==1 exit _rc
-            if _rc {
-                tempvar vv
-                qui gen double `vv' = `v' if `touse'
-                qui compress `vv'
-                local xvars `xvars' `vv'
-                continue
-            }
-            local xvars `xvars' `v'
-        }
-    }
-    else {
-        local xvars `varlist'
-    }
-    // compute balancing weights
-    qui gen double `wb' = . if `touse'
-    if "`over'"=="" {
-        local overlevels `""""'
-        local TOUSE `touse'
-    }
-    else {
-        tempvar ifvar
-        qui gen byte `ifvar' = .
-        local TOUSE `ifvar'
-    }
-    foreach o of local overlevels {
-        if `"`o'"'!="" {
-            quietly `noisily' di _n as txt "==> `over' = `o'"
-            qui replace `ifvar' = `touse' & (`over'==`o')
-        }
-        quietly `noisily' Balance_`method' `wb' `tvar' `TOUSE' /*
-            */ "`pooled'" "`wtype'" "`wvar'" `"`xvars'"' `"`opts'"'
-    }
-end
-
-program Balance_ipw
-    args wb tvar touse pooled wtype wvar xvars opts
-    // compute raw balancing weights
-    if "`wtype'"!="" local wgt "[`wtype'=`wvar']"
-    logit `tvar' `xvars' if `touse' `wgt', `opts'
-    tempvar ps
-    quietly predict double `ps' if e(sample), pr
-    qui replace `wb' = cond(`tvar', 1, `ps' / (1 - `ps')) if e(sample)
-    // fillin missings
-    capt assert (`wb'<.) if `touse'
-    if _rc==1 exit _rc
-    if _rc {
-        // set missing wb to 0 for reweighted group; else 1
-        qui replace `wb' = `tvar' if `wb'>=. & `touse'
-        di as err "some obs lost during computation of balancing"/*
-            */ " weights; balancing may be poor"
-    }
-    // factor-in base weights
-    if "`wtype'"!="" {
-        qui replace `wb' = `wb' * `wvar' if `touse'
-    }
-    // handle pooled and normalize weights
-    Balance_wb_rescale `wb' `tvar' `touse' "`pooled'" "`wtype'" "`wvar'"
-end
-
-program Balance_eb
-    args wb tvar touse pooled wtype wvar xvars opts
-    local 0 `", `opts'"'
-    syntax [, BTOLerance(numlist max=1 >=0) DIFficult ///
-        MAXIter(numlist integer max=1 >=0 <=16000) ///
-        PTOLerance(numlist max=1 >=0) ///
-        VTOLerance(numlist max=1 >=0) ]
-    if `"`btolerance'"'=="" local btolerance 1e-5
-    display _n as txt "Entropy balancing"
-    tempvar T C
-    qui gen byte `T' =  `tvar' & `touse'
-    qui gen byte `C' = !`tvar' & `touse'
-    mata: rd_balance_eb()
-    if "`wtype'"!="" {
-        qui replace `wb' = `wvar' if `T'
-    }
-    else {
-        qui replace `wb' = 1 if `T'
-    }
-    Balance_wb_rescale `wb' `tvar' `touse' "`pooled'" "`wtype'" "`wvar'"
-end
-
-program Balance_wb_rescale
-    args wb tvar touse pooled wtype wvar
-    // update weights if target is pooled sample
-    tempname WB
-    if "`pooled'"!="" {
-        // Step 1: make sure that sum of wb is equal to size of target group
-        su `wb' if `touse' & `tvar'==0, meanonly
-        scalar `WB' = r(sum)
-        if "`wtype'"=="" {
-            qui count if `touse' & `tvar'==1
-            qui replace `wb' = `wb' * (r(N)/`WB') if `tvar'==0 & `touse'
-        }
-        else {
-            su `wvar' if `touse' & `tvar'==1, meanonly
-            qui replace `wb' = `wb' * (r(sum)/`WB') if `tvar'==0 & `touse'
-        }
-        // Step 2: add base weight from reweighted group
-        qui replace `wb' = `wb' + `wvar' if `tvar'==0 & `touse'
-    }
-    // rescale rescale wb such that sum is equal to original group size
-    su `wb' if `touse' & `tvar'==0, meanonly
-    scalar `WB' = r(sum)
-    if "`wtype'"=="" {
-        qui count if `touse' & `tvar'==0
-        qui replace `wb' = `wb' * (r(N)/`WB') if `tvar'==0 & `touse'
-    }
-    else {
-        su `wvar' if `touse' & `tvar'==0, meanonly
-        qui replace `wb' = `wb' * (r(sum)/`WB') if `tvar'==0 & `touse'
+        local 0 `", `options'"'
+        syntax [, BTOLerance(numlist max=1 >=0) DIFficult ///
+            MAXIter(numlist integer max=1 >=0 <=16000) ///
+            PTOLerance(numlist max=1 >=0) ///
+            VTOLerance(numlist max=1 >=0) ]
+        if "`btolerance'"=="" local btolerance 1e-5
+        c_local bal_ebopts `"`btolerance' "`difficult'" "`maxiter'" "`ptolerance'" "`vtolerance'""'
     }
 end
 
@@ -2030,14 +1900,15 @@ program Parse_vce
         exit 198
     }
     c_local vcebwidth `bwidth'
-    c_local vcebwtype "`bwtype'"
-    c_local vcebwmethod "`bwmethod'"
+    c_local vcebwtype `bwtype'
+    c_local vcebwmethod `bwmethod'
     c_local vcebwdpi `bwdpi'
+    c_local vcebwnord `bwnord'
     c_local vcebwadjust `bwadjust'
     c_local vcekernel `"`kernel'"'
     c_local vceadaptive `adaptive'
-    c_local vceexact "`exact'"
-    c_local vceboundary "`boundary'"
+    c_local vceexact `exact'
+    c_local vceboundary `boundary'
     c_local vcenapprox `napprox'
 end
 
@@ -2065,6 +1936,34 @@ program Parse_densityopts
         BWidth(str) BWADJust(numlist >0 max=1) ///
         Kernel(string) ADAPTive(numlist int >=0 max=1) exact ///
         BOundary(str)  NApprox(numlist int >1 max=1) ]
+    Parse_bwopt `bwidth'
+    if "`bwdpi'"==""    local bwdpi 2
+    if "`bwadjust'"=="" local bwadjust 1
+    if `"`kernel'"'=="" local kernel "gaussian"
+    if "`adaptive'"=="" local adaptive 0
+    Parse_boundary, `boundary'
+    if ("`napprox'"=="") local napprox 512
+    c_local bwidth `bwidth'
+    c_local bwtype `bwtype'
+    c_local bwmethod `bwmethod'
+    c_local bwdpi `bwdpi'
+    c_local bwnord `bwnord'
+    c_local bwadjust `bwadjust'
+    c_local kernel `"`kernel'"'
+    c_local adaptive `adaptive'
+    c_local exact    `exact'
+    c_local boundary `boundary'
+    c_local napprox `napprox'
+end
+
+program Parse_bwopt  // returns: bwidth, bwtype, bwmethod, bwdpi, bwnord
+    _parse comma bwidth 0 : 0
+    capt n syntax [, NORD ]
+    if _rc==1 exit _rc
+    if _rc {
+        di as err "error in option {bf:bwidth()}"
+        exit 198
+    }
     capt confirm number `bwidth'
     if _rc==1 exit _rc
     if _rc==0 {
@@ -2105,25 +2004,14 @@ program Parse_densityopts
             else Parse_bwmethod, `bwidth'
         }
     }
-    if "`bwdpi'"==""    local bwdpi 2
-    if "`bwadjust'"=="" local bwadjust 1
-    if `"`kernel'"'=="" local kernel "gaussian"
-    if "`adaptive'"=="" local adaptive 0
-    Parse_boundary, `boundary'
-    if ("`napprox'"=="") local napprox 512
     c_local bwidth `bwidth'
-    c_local bwtype "`bwtype'"
-    c_local bwmethod "`bwmethod'"
+    c_local bwtype `bwtype'
+    c_local bwmethod `bwmethod'
     c_local bwdpi `bwdpi'
-    c_local bwadjust `bwadjust'
-    c_local kernel `"`kernel'"'
-    c_local adaptive `adaptive'
-    c_local exact    "`exact'"
-    c_local boundary "`boundary'"
-    c_local napprox `napprox'
+    c_local bwnord `nord'
 end
 
-program Parse_bwmethod  // returns: bwmethod, bwdpi
+program Parse_bwmethod  // returns: bwidth, bwmethod, bwdpi
     capt n syntax [, Silverman Normalscale Oversmoothed SJpi Dpi Dpi2(numlist int >=0 max=1) ISJ ]
     if _rc==1 exit _rc
     if _rc {
@@ -2203,7 +2091,7 @@ program PDF, eclass
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         HISTogram HISTogram2(numlist int >0 max=1) alt ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) * ]
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace * ]
     if "`nobreak'"!="" local descending
     Get_densityopts dopts, `options'
     Parse_densityopts, `dopts'
@@ -2235,15 +2123,8 @@ program PDF, eclass
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     Check_categorical `touse' `depvar' "`refvar'" "`categorical'"
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "" "" `bal_wvar' `"`bal_varlist'"' `"`bal_method'"' "`bal_ref'" ///
-            "`bal_noisily'" `"`bal_opts'"'
-    }
-    
     // compute relative PDF
+    mata: rd_generate_init("bal_wvar", 1)
     tempname b AT OGRID BW
     mata: rd_PDF(strtoreal("`n'"))
     
@@ -2283,6 +2164,11 @@ program PDF, eclass
         if "`bwmethod'"=="dpi" {
             local bwmethod `bwmethod'(`bwdpi')
         }
+        if "`bwmethod'"!="" {
+            if "`bwnord'"!="" {
+                local bwmethod `bwmethod', `bwnord'
+            }
+        }
         eret local  bwmethod "`bwmethod'"
         eret scalar bwadjust = `bwadjust'
         eret local  kernel   "`kernel'"
@@ -2296,6 +2182,9 @@ program PDF, eclass
         eret scalar hwidth = 1/`nhist'
         eret local alt     "`alt'"
     }
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
 
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
@@ -2308,7 +2197,7 @@ program HIST, eclass
         NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >0 max=1) alt DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) ]
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
     local nobreak
     local nomid
     local descending
@@ -2337,15 +2226,8 @@ program HIST, eclass
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "" "" `bal_wvar' `"`bal_varlist'"' `"`bal_method'"' "`bal_ref'" ///
-            "`bal_noisily'" `"`bal_opts'"'
-    }
-    
     // compute relative PDF
+    mata: rd_generate_init("bal_wvar", 1)
     tempname b AT OGRID
     if "`discrete'`categorical'"!="" {
         mata: rd_PDF(strtoreal("`n'"))
@@ -2377,7 +2259,10 @@ program HIST, eclass
         eret scalar hwidth   = 1/`n'
         eret local  alt        "`alt'"
     }
-
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
+    
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
 end
@@ -2389,7 +2274,7 @@ program CDF, eclass
         NOBReak NOMID DESCending ADJust(str) BALance(str) ///
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical alt ///
         NOOGRID ogrid(numlist int >0 max=1) ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) ]
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
     local nobreak
     local nomid
     local descending
@@ -2415,15 +2300,8 @@ program CDF, eclass
     Check_categorical `touse' `depvar' "`refvar'" "`categorical'"
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "" "" `bal_wvar' `"`bal_varlist'"' `"`bal_method'"' "`bal_ref'" ///
-            "`bal_noisily'" `"`bal_opts'"'
-    }
-    
     // compute relative CDF
+    mata: rd_generate_init("bal_wvar", 1)
     tempname b AT OGRID
     mata: rd_CDF(strtoreal("`n'"))
     
@@ -2460,7 +2338,10 @@ program CDF, eclass
         eret matrix ogrid  = `OGRID'
     }
     eret scalar n = `n'
-
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
+    
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
 end
@@ -2473,7 +2354,7 @@ program DIV, eclass
         NOBReak NOMID DESCending ADJust(str) BALance(str) Over(varname numeric) ///
         n(numlist int >0 max=1) alt DISCRete CATegorical PDF ///
         COMpare COMpare2(str) ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) * ]
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace * ]
     // which measures?
     if "`all'"!="" local stats entropy chi2 tvd
     else {
@@ -2545,21 +2426,9 @@ program DIV, eclass
         }
     }
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "`over'" "`overlevels'" `bal_wvar' `"`bal_varlist'"' ///
-            `"`bal_method'"' "`bal_ref'" "`bal_noisily'" `"`bal_opts'"'
-    }
-    if `"`c_bal_varlist'"'!="" {
-        if "`c_bal_wvar'"=="" tempvar c_bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "`over'" "`overlevels'" `c_bal_wvar' `"`c_bal_varlist'"' ///
-            `"`c_bal_method'"' "`c_bal_ref'" "`c_bal_noisily'" `"`c_bal_opts'"'
-    }
-    
     // compute divergence
+    mata: rd_generate_init("bal_wvar", 1)
+    mata: rd_generate_init("bal_wvar", 1, "c_")
     local nstat: list sizeof stats
     if "`nose'"=="" {
         local J = `nstat'
@@ -2643,6 +2512,11 @@ program DIV, eclass
             if "`bwmethod'"=="dpi" {
                 local bwmethod `bwmethod'(`bwdpi')
             }
+            if "`bwmethod'"!="" {
+                if "`bwnord'"!="" {
+                    local bwmethod `bwmethod', `bwnord'
+                }
+            }
             eret local  bwmethod "`bwmethod'"
             eret scalar bwadjust = `bwadjust'
             eret local  kernel   "`kernel'"
@@ -2672,7 +2546,11 @@ program DIV, eclass
             eret local c_balopts      `"`c_bal_opts'"'
         }
     }
-
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
+    mata: rd_generate_return("bal_wvar", "c_")
+    
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
 end
@@ -2712,7 +2590,9 @@ program DIV_parse_compare
     c_local c_bal_noisily  `bal_noisily'
     c_local c_bal_ref      `bal_ref'
     c_local c_bal_contrast `bal_contrast'
-    c_local c_bal_opts     `bal_opts'
+    c_local c_bal_opts     `"`bal_opts'"'
+    c_local c_bal_ebopts   `"`bal_ebopts'"'
+    c_local c_bal_wvar     `bal_wvar'
 end
 
 program MRP, eclass
@@ -2721,7 +2601,7 @@ program MRP, eclass
     syntax [if] [in] [fw iw pw/], [ ///
         NOBReak NOMID DESCending BALance(str) Over(varname numeric) ///
         SCale SCale2(str) MULTiplicative LOGarithmic REFerence ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) ]
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
     if "`nobreak'"!="" local descending
     Parse_vce `vce'
     if `"`scale2'"'!="" local scale scale
@@ -2764,15 +2644,8 @@ program MRP, eclass
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "`over'" "`overlevels'" `bal_wvar' `"`bal_varlist'"' ///
-            `"`bal_method'"' "`bal_ref'" "`bal_noisily'" `"`bal_opts'"'
-    }
-    
     // compute polarization statistics
+    mata: rd_generate_init("bal_wvar", 1)
     if "`nose'"=="" {
         forv i = 1/3 {
             tempvar IF
@@ -2814,7 +2687,10 @@ program MRP, eclass
     mata: rd_Post_common_e()
     eret local  subcmd   "mrp"
     eret local  title    "Median relative polarization"
-
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
+    
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
 end
@@ -2824,17 +2700,15 @@ program SUM, eclass
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
         NOBReak NOMID DESCending ADJust(str) BALance(str) Over(varname numeric) ///
-        Statistics(str) Generate(name) Replace ///
-        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) ]
+        Statistics(str) Generate(name) ///
+        vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
     if "`nobreak'"!="" local descending
     Parse_vce `vce'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
-    if "`generate'"!="" & "`replace'"=="" {
-        confirm new variable `generate'
-    }
+    mata: rd_generate_init("generate")
     foreach s of local statistics {
-        Parse_statistics, `s'
+        SUM_parse_stats, `s'
         local stats `stats' `s'
     }
     local stats: list uniq stats
@@ -2848,25 +2722,14 @@ program SUM, eclass
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
     Check_adjlog `touse' `depvar' "`refvar'" "`by'" "`adjlog'"
     
-    // compute weights for balancing
-    if `"`bal_varlist'"'!="" {
-        if "`bal_wvar'"=="" tempvar bal_wvar
-        Balance "`pooled'" `touse' `by' `by1' `by0' "`weight'" `"`wvar'"' ///
-            "`over'" "`overlevels'" `bal_wvar' `"`bal_varlist'"' ///
-            `"`bal_method'"' "`bal_ref'" "`bal_noisily'" `"`bal_opts'"'
-    }
-    
     // compute relative ranks, statistics, and influence functions
+    mata: rd_generate_init("bal_wvar", 1)
     if "`nose'"=="" {
         foreach stat of local stats {
             tempvar IF
             qui gen double `IF' = 0 if `touse'
             local IFS `IFs' `IF'
         }
-    }
-    if "`generate'"!="" {
-        tempvar ranks
-        qui gen double `ranks' = .
     }
     tempname b
     if "`over'"=="" {
@@ -2906,20 +2769,20 @@ program SUM, eclass
     eret local statistics "`stats'"
     
     // store ranks in variable
+    mata: rd_generate_return("generate")
     if "`generate'"!="" {
-        eret local generate `generate'
-        capt confirm new variable `generate'
-        if _rc==1 exit _rc
-        if _rc drop `generate'
-        rename `ranks' `generate'
         lab var `generate' "Relative ranks"
+        eret local generate `generate'
     }
+    
+    // return balancing weights
+    mata: rd_generate_return("bal_wvar")
     
     // store IFs
     Store_IFs "`IFs'" "`_ifgenerate'"
 end
 
-program Parse_statistics
+program SUM_parse_stats
     syntax [, Mean MEDian sd Variance iqr * ]
     if `"`options'"'!="" {
         if (substr(`"`options'"',1,1)=="p") {
@@ -2939,6 +2802,8 @@ local DATA   rd_data
 local Data   struct `DATA' scalar
 local GRP    rd_data_grp
 local Grp    struct `GRP' scalar
+local BAL    rd_data_bal
+local Bal    struct `BAL' scalar
 local ADJ    rd_adj
 local Adj    struct `ADJ' scalar
 local GADJ   rd_adj_grp
@@ -3015,40 +2880,6 @@ void Strlen(`SS' nm, `SS' s, | `SS' s2)
     return(udstrlen(s))
 }
 
-void rd_balance_eb()
-{
-    `RM' X1, X0
-    `RC' w1, w0
-    transmorphic S
-    pragma unset X1
-    pragma unset X0
-    pragma unset w1
-    pragma unset w0
-    
-    // data
-    st_view(X1, ., tokens(st_local("xvars")), st_local("T"))
-    st_view(X0, ., tokens(st_local("xvars")), st_local("C"))
-    if (st_local("wtype")=="") w0 = w1 = 1
-    else {
-        st_view(w1, ., st_local("wvar"), st_local("T"))
-        st_view(w0, ., st_local("wvar"), st_local("C"))
-    }
-    S = mm_ebal_init(X1, w1, X0, w0)
-    // settings
-    mm_ebal_btol(S, strtoreal(st_local("btolerance")))
-    if (st_local("difficult")!="")  mm_ebal_difficult(S, 1)
-    if (st_local("maxiter")!="")    mm_ebal_maxiter(S, strtoreal(st_local("maxiter")))
-    if (st_local("ptolerance")!="") mm_ebal_ptol(S, strtoreal(st_local("ptolerance")))
-    if (st_local("vtolerance")!="") mm_ebal_vtol(S, strtoreal(st_local("vtolerance")))
-    // estimation
-    if (mm_ebal(S)==0) {
-        stata(`"di as err "balancing tolerance not achieved; balancing may be poor""')
-        // using stata("di as err") instead of display("{err}...") so that message
-        // is displayed if c(noisily)==0
-    }
-    st_store(., st_local("wb"), st_local("C"), mm_ebal_W(S))
-}
-
 void rd_GetCI(`RS' level0, `Int' citype)
 {   // citype: 0 = regular, 1 = logit, 2 = probit, 3 = atanh, 4 = log
     `Int' i, r 
@@ -3112,6 +2943,42 @@ void rd_check_mat(`SS' nm, `Int' kind)
     // check whether in [0,1]
     assert(!any(m:<0))
     assert(!any(m:>1))
+}
+
+void rd_generate_init(`SS' nm, | `Bool' bal, `SS' prefix)
+{   // initializes a tempvar
+    // returns the varname in local macro named as strupper(nm)
+    // fills in tempvar = w if bal!=0
+    `SS'  tmpnm, w
+    `Int' rc
+    
+    if (args()<2) bal = 0
+    if (st_local(prefix+nm)=="") return
+    if (st_local("replace")=="") {
+        rc = _stata("confirm new variable " + st_local(prefix+nm))
+        if (rc) exit(rc)
+    }
+    tmpnm = st_tempname()
+    st_local(prefix+strupper(nm), tmpnm)
+    if (!bal) {
+        stata("qui gen double " + tmpnm + " = .")
+        return
+    }
+    if (st_local("weight")!="") w = st_local("wvar")
+    else                        w = "1"
+    stata("qui gen double " + tmpnm + " = " + w + " if " + st_local("touse"))
+}
+
+void rd_generate_return(`SS' nm, | `SS' prefix)
+{
+    `SS'  tmpv
+    `Int' idx
+    
+    if (st_local(prefix+nm)=="") return
+    tmpv = st_local(prefix+strupper(nm))
+    if (tmpv=="") return // should never happen
+    if ((idx = _st_varindex(st_local(prefix+nm)))<.) st_dropvar(idx)
+    st_varrename(tmpv, st_local(prefix+nm))
 }
 
 void rd_Post_common_e()
@@ -3340,13 +3207,13 @@ struct `GADJ' {
 struct `GRP' {
     `Int'   touse      // Stata variable marking sample
     `RC'    yvar       // Stata variable containing outcome data
+    `Bool'  desc       // use descending sort order within ties
     `RC'    y          // outcome data
     `RS'    N          // N of observations
     `RC'    w          // weights
     `RS'    W          // sum of weights
     `Int'   wtype      // (see below)
-    `Bool'  bal        // apply balancing
-    `RC'    wb         // balancing weights (w = wb * baseweight)
+    `Bool'  bal        // has balancing
     `Gadj'  adj        // location/scale/shape adjustments
     `RC'    lny        // log of outcome data
     `RC'    l          // location
@@ -3355,16 +3222,33 @@ struct `GRP' {
     `RM'    IF         // influence functions
     `RC'    IFl        // influence function of location measure
     `RC'    IFs        // influence function of scale measure
-    `Bool'  desc       // use descending sort order within ties
     `IntC'  p          // permutation vector
+}
+
+struct `BAL' {
+    `Bool'  ref        // balance reference group
+    `Bool'  contrast   // compute RD of balanced vs. unbalanced
+    `SS'    zvars      // names of balancing variables
+    `SS'    T          // Stata variable marking treatment group
+    `RS'    T_N        // treatment group: N of observations
+    `RM'    T_IF       // treatment group: influence functions 
+    `RC'    T_IFl      // treatment group: location measure IF
+    `RC'    T_IFs      // treatment group: scale measure IF
+    `RM'    T_IFZ      // treatment group: balancing model IFs
+    `SS'    C          // Stata variable marking control group
+    `RM'    Z          // control group: balancing variables (view)
+    `RM'    IFZ        // control group: IFs of balancing model
+    `RC'    w          // control group: balancing weights (net of base weights)
 }
 
 struct `DATA' {
     `Bool'  by         // syntax 1
     `Bool'  tbreak     // break ties
     `Bool'  mid        // use midpoints for relative ranks
+    `Bool'  pooled     // reference is pooled distribution
     `Int'   wtype      // weights: 0 none, 1 fw, 2 pw, 3 iw
     `Bool'  nose       // do not compute influence functions
+    `Bal'   bal        // balancing results
     `Adj'   adj        // adjustment settings
     `Grp'   D          // comparison distribution data
     `Grp'   R          // reference distribution data
@@ -3384,6 +3268,7 @@ void rd_getdata(`Data' data)
     data.tbreak   = (st_local("nobreak")=="")
     data.mid      = (st_local("nomid")=="")
     data.D.desc   = data.R.desc = (st_local("descending")!="")
+    data.pooled   = (st_local("pooled")!="")
     weight        = st_local("weight")
     data.wtype    = (weight=="fweight" ? 1 :
                     (weight=="pweight" ? 2 :
@@ -3393,74 +3278,40 @@ void rd_getdata(`Data' data)
     data.nose     = (st_local("nose")!="")
     data.D.nose   = data.R.nose = data.nose
     
+    // balancing
+    data.bal.ref      = (st_local("bal_ref")!="")
+    data.bal.contrast = (st_local("bal_contrast")!="")
+    rd_balance(data, data.bal)
+    
     // comparison group data
     data.D.yvar = st_varindex(st_local("depvar"))
-    data.D.bal = 0
     if (data.by) {
-        if (st_local("bal_varlist")!="") {
-            if (st_local("bal_contrast")!="") {
-                if (st_local("bal_ref")!="") {
-                    data.D.bal = 1
-                    data.D.touse = st_varindex(st_local("touse0"))
-                }
-                else {
-                    data.D.touse = st_varindex(st_local("touse1"))
-                }
-            }
-            else {
-                if (st_local("bal_ref")!="") {
-                    data.D.touse = st_varindex(st_local("touse1"))
-                }
-                else {
-                    data.D.bal = 1
-                    data.D.touse = st_varindex(st_local("touse1"))
-                }
-            }
+        if (data.D.bal) {
+            if (data.bal.ref) data.D.touse = st_varindex(st_local("touse0"))
+            else              data.D.touse = st_varindex(st_local("touse1"))
         }
         else data.D.touse = st_varindex(st_local("touse1"))
     }
     else data.D.touse = st_varindex(st_local("touse"))
-    _rd_getdata(data.D)
+    _rd_getdata(data, data.D)
     
     // reference group data
-    data.R.bal = 0
     if (data.by) {
         data.R.yvar = data.D.yvar
-        if (st_local("bal_varlist")!="") {
-            if (st_local("bal_contrast")!="") {
-                if (st_local("bal_ref")!="") {
-                    data.R.touse = st_varindex(st_local("touse0"))
-                }
-                else {
-                    data.R.bal = 1
-                    data.R.touse = st_varindex(st_local("touse1"))
-                }
-            }
-            else {
-                if (st_local("bal_ref")!="") {
-                    data.R.bal = 1
-                    data.R.touse = st_varindex(st_local("touse0"))
-                }
-                else {
-                    if (st_local("pooled")!="") {
-                        data.R.touse = st_varindex(st_local("touse"))
-                    }
-                    else {
-                        data.R.touse = st_varindex(st_local("touse0"))
-                    }
-                }
-            }
+        if (data.R.bal) {
+            if (data.bal.ref) data.R.touse = st_varindex(st_local("touse0"))
+            else              data.R.touse = st_varindex(st_local("touse1"))
         }
-        else if (st_local("pooled")!="") {
-            data.R.touse = st_varindex(st_local("touse"))
+        else {
+            if (data.pooled)  data.R.touse = st_varindex(st_local("touse"))
+            else              data.R.touse = st_varindex(st_local("touse0"))
         }
-        else data.R.touse = st_varindex(st_local("touse0"))
     }
     else {
         data.R.yvar = st_varindex(st_local("refvar"))
         data.R.touse = st_varindex(st_local("touse"))
     }
-    _rd_getdata(data.R)
+    _rd_getdata(data, data.R)
     
     // check number of obs
     if (data.D.N<1 | data.R.N<1) {
@@ -3495,7 +3346,7 @@ void rd_getdata(`Data' data)
     _rd_adjust(data)
 }
 
-void _rd_getdata(`Grp' G)
+void _rd_getdata(`Data' data, `Grp' G)
 {
     // outcome data
     G.y = st_data(., G.yvar, G.touse)
@@ -3503,20 +3354,18 @@ void _rd_getdata(`Grp' G)
     
     // get base weights
     if (G.wtype) {
-        G.w = st_data(., st_local("wvar"), G.touse)
+        if (G.bal) {
+            G.w = data.bal.w
+            // redefine bal.w; needed for IFs
+            data.bal.w = data.bal.w :/ st_data(., st_local("wvar"), G.touse)
+        }
+        else G.w = st_data(., st_local("wvar"), G.touse)
         G.W = quadsum(G.w)
     }
     else {
-        G.w = 1
+        if (G.bal) G.w = data.bal.w
+        else       G.w = 1
         G.W = G.N
-    }
-    
-    // get balancing weights
-    if (G.bal) {
-        G.wb = G.w // backup base weights
-        G.w  = st_data(., st_local("bal_wvar"), G.touse)
-        //assert(mreldif(G.W, quadsum(G.w))<1e-12)
-        G.wb = G.w :/ G.wb // extract balancing weights; needed for IFs
     }
     
     // order the data
@@ -3524,11 +3373,202 @@ void _rd_getdata(`Grp' G)
         if (G.desc) G.p = order((G.y,G.w), (1,-2))
         else        G.p = order((G.y,G.w), (1,2))
         G.w = G.w[G.p]
-        if (G.bal) G.wb = G.wb[G.p]
+        if (G.bal) {
+            data.bal.w = data.bal.w[G.p]
+            if (data.nose==0) {
+                data.bal.Z = data.bal.Z[G.p,]
+                data.bal.IFZ = data.bal.IFZ[G.p,]
+            }
+        }
     }
     else G.p = order(G.y, 1)
     G.y = G.y[G.p]
-    G.p = invorder(G.p) // so that p can be used to write data back to Stata
+    
+    // redefine G.p so that it can be used to write data back to Stata
+    G.p = invorder(G.p)
+}
+
+void rd_balance(`Data' data, `Bal' bal)
+{
+    // has balancing?
+    data.D.bal = data.R.bal = 0
+    bal.zvars = st_local("bal_varlist")
+    if (bal.zvars=="") return
+    
+    // set flag for distribution that will contain balancing
+    if   (data.bal.ref==data.bal.contrast) data.D.bal = 1
+    else                                   data.R.bal = 1
+
+    // determine treatment group and control group
+    if (data.bal.ref) {
+        bal.T = st_local("touse1") // treatment group
+        bal.C = st_local("touse0") // control group (to be balanced)
+    }
+    else {
+        bal.T = st_local("touse0")  // treatment group
+        bal.C = st_local("touse1")  // control group (to be balanced)
+    }
+    // compute balancing weights and IFs
+    if (st_local("bal_method")=="eb") rd_balance_eb(data, bal)
+    else                              rd_balance_ipw(data, bal)
+    
+    // store balancing weights
+    if (st_local("BAL_WVAR")!="") {
+        st_store(., st_local("BAL_WVAR"), bal.C, bal.w)
+    }
+}
+
+void rd_balance_ipw(`Data' data, `Bal' bal)
+{
+    `SR' ps
+    `RC' w0
+    
+    // run logit and obtain ps
+    stata("quietly \`bal_noisily' logit " + bal.T + 
+        " \`bal_varlist' if \`touse' \`wgt', \`bal_opts'")
+    ps = st_tempname()
+    stata("quietly predict double " + ps + " if e(sample), pr")
+    
+    // compute balancing weights (balanced group only)
+    bal.w = st_data(., ps, bal.C)
+    bal.w = bal.w :/ (1 :- bal.w)
+    if (data.wtype) {
+        // factor in base weights and rescale to size of treatment group
+        w0 = st_data(., st_local("wvar"), bal.C)
+        bal.w = bal.w :* w0
+        bal.w = bal.w * (quadsum(st_data(., st_local("wvar"), bal.T)) / quadsum(bal.w))
+    }
+    else {
+        // rescale to size of treatment group (sum of logit-IPW weights
+        // only approximates the size of the treatment group)
+        bal.w = bal.w * (rows(st_data(., bal.T, bal.T)) / quadsum(bal.w))
+    }
+    if (hasmissing(bal.w)) {
+        printf("{err}warning: some observations lost during computation of balancing weights\n")
+        printf("{err}         balancing may be poor")
+        if (data.nose==0) printf("; standard errors may be invalid\n")
+        else              printf("\n")
+        _editmissing(bal.w, 0)
+    }
+    
+    // fillin IFs
+    if (data.nose==0) rd_balance_ipw_IF(data, bal, 
+        st_data(., bal.T, st_local("touse")), 
+        st_data(., ps, st_local("touse")))
+    
+    // update weights if -pooled- and normalize
+    rd_balance_rescale(data, bal, w0)
+
+    // cleanup
+    st_dropvar(ps)
+}
+
+void rd_balance_ipw_IF(`Data' data, `Bal' bal, `RC' Y, `RC' p)
+{
+    `Bool' cons
+    `RC'   h, w
+    `RM'   Z, IFZ
+    pragma unset Z
+    
+    // compute IFs
+    cons  = anyof(st_matrixcolstripe("e(b)")[,2], "_cons")
+    st_view(Z, ., bal.zvars, st_local("touse"))
+    h = (Y :- p)
+    if (cons) h = Z :* h, h
+    else      h = Z :* h
+    w = p :* (1 :- p)
+    if (data.wtype) w = w :* st_data(., st_local("wvar"), st_local("touse"))
+    IFZ = h * invsym(cross(Z, cons, w, Z, cons))'
+    
+    // store results in data.bal
+    bal.T_IFZ = select(IFZ, Y:==1)
+    bal.T_N   = rows(bal.T_IFZ)
+    bal.IFZ   = select(IFZ, Y:==0)
+    bal.Z     = st_data(., bal.zvars, bal.C)
+    if (cons) bal.Z = bal.Z, J(rows(bal.Z), 1, 1)
+}
+
+void rd_balance_eb(`Data' data, `Bal' bal)
+{
+    `RM' X1, X0
+    `RC' w1, w0
+    `SR' opts
+    transmorphic S
+    pragma unset X1
+    pragma unset X0
+    
+    // data
+    st_view(X1, ., bal.zvars, bal.T)
+    st_view(X0, ., bal.zvars, bal.C)
+    if (data.wtype) {
+        w1 = st_data(., st_local("wvar"), bal.T)
+        w0 = st_data(., st_local("wvar"), bal.C)
+    }
+    else w0 = w1 = 1
+    S = mm_ebal_init(X1, w1, X0, w0)
+
+    // settings
+    opts = tokens(st_local("bal_ebopts"))
+    if (opts[1]!="") mm_ebal_btol(S, strtoreal(opts[1]))
+    if (opts[2]!="") mm_ebal_difficult(S, 1)
+    if (opts[3]!="") mm_ebal_maxiter(S, strtoreal(opts[3]))
+    if (opts[4]!="") mm_ebal_ptol(S, strtoreal(opts[4]))
+    if (opts[5]!="") mm_ebal_vtol(S, strtoreal(opts[5]))
+    if (st_local("bal_noisily")=="") mm_ebal_trace(S, "none")
+
+    // estimation
+    if (mm_ebal(S)==0) {
+        printf("{err}warning: balancing tolerance not achieved\n")
+        printf("{err}         balancing may be poor")
+        if (data.nose==0) printf("; standard errors may be invalid\n")
+        else              printf("\n")
+    }
+    bal.w = mm_ebal_W(S)
+    if (hasmissing(bal.w)) {
+        display("{err}unexpected error; balancing weights contain missing values")
+        exit(error(499))
+    }
+
+    // fillin IFs
+    if (data.nose==0) rd_balance_eb_IF(data, bal, X1, w1, X0, w0)
+
+    // update weights if -pooled- and normalize
+    rd_balance_rescale(data, bal, w0)
+}
+
+void rd_balance_eb_IF(`Data' data, `Bal' bal, `RM' X1, `RC' w1, `RM' X0, `RC' w0)
+{
+    `RR' M 
+    `RC' h
+    `RM' G
+    
+    M    = mean(X1, w1) // target moments
+    h    = X0 :- M
+    G    = invsym(cross(h, bal.w, X0))
+    bal.T_IFZ = ((X1 :- M) * G') 
+        // => no need to add (\tilde W_!T / W_T) because it is equal to one
+        //    given the scaling of the weights returned by mm_ebal()
+    bal.IFZ   = - (bal.w:/w0) :* h * G'
+    bal.T_N   = rows(bal.T_IFZ)
+    bal.Z     = X0 // (no longer a view)
+}
+
+void rd_balance_rescale(`Data' data, `Bal' bal, `RC' w0)
+{
+    // at this point sum(bal.w) is equal to the size of the treatment group
+    if (data.wtype) {
+        // add base weight if pooled
+        if (data.pooled) bal.w = w0 :+ bal.w
+        // rescale to size of control group
+        bal.w = bal.w * (quadsum(w0)/quadsum(bal.w))
+    }
+    else {
+        // add one if pooled
+        if (data.pooled) bal.w = 1 :+ bal.w
+        // rescale to size of control group
+        bal.w = bal.w * (rows(bal.w)/quadsum(bal.w))
+    }
+    sum(bal.w)
 }
 
 void _rd_getadj(`Gadj' adj, `SS' lnm)
@@ -3551,8 +3591,8 @@ void _rd_adjust(`Data' data)
     _rd_adjust_check(data.D.adj, get)
     _rd_adjust_check(data.R.adj, get)
     if (get) {
-        _rd_adjust_prep(data.D, data.adj, get)
-        _rd_adjust_prep(data.R, data.adj, get)
+        _rd_adjust_prep(data, data.D, data.adj, get)
+        _rd_adjust_prep(data, data.R, data.adj, get)
         if (data.adj.link==2) {
             if ((data.R.l/data.D.l)<=0 | (data.R.l/data.D.l)>=.) {
                 display("{err}invalid location adjustment factor; data not suitable for multiplicative adjustment")
@@ -3579,37 +3619,37 @@ void _rd_adjust_check(`Gadj' adj, `Int' get)
     }
 }
 
-void _rd_adjust_prep(`Grp' G, `Adj' adj, `Int' get)
+void _rd_adjust_prep(`Data' data, `Grp' G, `Adj' adj, `Int' get)
 {
     if (adj.link==1) {
         G.lny = ln(G.y)
-        if (adj.mean)   G.l = _rd_adjust_mean(G, G.lny)
-        else            G.l = _rd_adjust_median(G, G.lny)
+        if (adj.mean)   G.l = _rd_adjust_mean(data, G, G.lny)
+        else            G.l = _rd_adjust_median(data, G, G.lny)
         if (get>1) {
-            if (adj.sd) G.s = _rd_adjust_sd(G, G.lny)
-            else        G.s = _rd_adjust_iqrange(G, G.lny)
+            if (adj.sd) G.s = _rd_adjust_sd(data, G, G.lny)
+            else        G.s = _rd_adjust_iqrange(data, G, G.lny)
         }
         return
     }
-    if (adj.mean)       G.l = _rd_adjust_mean(G, G.y)
-    else                G.l = _rd_adjust_median(G, G.y)
+    if (adj.mean)       G.l = _rd_adjust_mean(data, G, G.y)
+    else                G.l = _rd_adjust_median(data, G, G.y)
     if (get>1) {
-        if (adj.sd)     G.s = _rd_adjust_sd(G, G.y)
-        else            G.s = _rd_adjust_iqrange(G, G.y)
+        if (adj.sd)     G.s = _rd_adjust_sd(data, G, G.y)
+        else            G.s = _rd_adjust_iqrange(data, G, G.y)
     }
 }
 
-`RS' _rd_adjust_mean(`Grp' G, `RC' y)
+`RS' _rd_adjust_mean(`Data' data, `Grp' G, `RC' y)
 {
     `RS' l
     
     l = mean(y, G.w)
     if (G.nose) return(l)
-    G.IFl = (y :- l) / G.W
+    _rd_IF_bal(data.bal, .l, G, (y :- l) / G.W)
     return(l)
 }
 
-`RS' _rd_adjust_median(`Grp' G, `RC' y)
+`RS' _rd_adjust_median(`Data' data, `Grp' G, `RC' y)
 {
     `RS' l, fx
     `RC' z
@@ -3618,12 +3658,12 @@ void _rd_adjust_prep(`Grp' G, `Adj' adj, `Int' get)
     if (G.nose) return(l)
     fx = _rd_kdens(y, G.w, G.wtype>=2, l, "exact") 
     z = (y :<= l)
-    G.IFl = (mean(z, G.w) :- z) / (G.W * fx)
-    // using mean(z) instead of .5 ensures that sum(IF)=0
+    _rd_IF_bal(data.bal, .l, G, (mean(z, G.w) :- z) / (G.W * fx))
+        // using mean(z) instead of .5 ensures that sum(IF)=0
     return(l)
 }
 
-`RS' _rd_adjust_sd(`Grp' G, `RC' y)
+`RS' _rd_adjust_sd(`Data' data, `Grp' G, `RC' y)
 {
     `RS' v, s, m, c
     
@@ -3642,23 +3682,23 @@ void _rd_adjust_prep(`Grp' G, `Adj' adj, `Int' get)
     m = mean(y, G.w)
     if (G.wtype>=2) c = 1 / (1 - 1/G.N)
     else            c = 1 / (1 - 1/G.W)
-    G.IFs = (c:*(y :- m):^2 :- v) / (2 * s * G.W)
+    _rd_IF_bal(data.bal, .s, G, (c:*(y :- m):^2 :- v) / (2 * s * G.W))
     return(s)
 }
 
-`RS' _rd_adjust_iqrange(`Grp' G, `RC' y)
+`RS' _rd_adjust_iqrange(`Data' data, `Grp' G, `RC' y)
 {
     `RC' q, fx
-    `RC' z
+    `RC' z1, z2
     
     q = _mm_quantile(y, G.w, (.25 \ .75), 2)
     if (G.nose) return(q[2]-q[1])
     fx = _rd_kdens(y, G.w, G.wtype>=2, q, "exact")
-    z = (y :<= q[2])
-    G.IFs = (mean(z, G.w) :- z) / fx[2]
-    z = (y :<= q[1])
-    G.IFs = (G.IFs - (mean(z, G.w) :- z) / fx[1]) / G.W
-    // using mean(z) instead of .75 and .25 ensures that sum(IF)=0
+    z1 = (y :<= q[1])
+    z2 = (y :<= q[2])
+    _rd_IF_bal(data.bal, .s, G, 
+        ((mean(z2, G.w) :- z2)/fx[2] - (mean(z1, G.w) :- z1)/fx[1]) / G.W)
+        // using mean(z) instead of .75 and .25 ensures that sum(IF)=0
     return(q[2]-q[1])
 }
 
@@ -3858,6 +3898,44 @@ void rd_ogrid(`Data' data, `Bool' cdf)
     return(S.d(at, exact!=""))
 }
 
+void _rd_IF_init(`Data' data, `Int' n)
+{
+    data.D.IF = J(data.D.N, n, 0)
+    data.R.IF = J(data.R.N, n, 0)
+    if (data.D.bal | data.R.bal) data.bal.T_IF = J(data.bal.T_N, n, 0)
+}
+
+void _rd_IF_bal(`Bal' bal, `Int' j, `Grp' G, `RC' h)
+{   // append contribution to IFs due to balancing
+    `RR' delta
+    
+    if (G.bal) delta = colsum(G.w :* h :* bal.Z)'
+    // location
+    if (j==.l) {
+        if (G.bal) {
+            G.IFl     = bal.w :* h + bal.IFZ   * delta
+            bal.T_IFl =              bal.T_IFZ * delta
+        }
+        else G.IFl = h
+    }
+    // scale
+    else if (j==.s) {
+        if (G.bal) {
+            G.IFs     = bal.w :* h + bal.IFZ   * delta
+            bal.T_IFs =              bal.T_IFZ * delta
+        }
+        else G.IFs = h
+    }
+    // other
+    else {
+        if (G.bal) {
+            G.IF[,j]     = G.IF[,j]     + bal.w :* h + bal.IFZ   * delta
+            bal.T_IF[,j] = bal.T_IF[,j] +              bal.T_IFZ * delta
+        }
+        else G.IF[,j] = G.IF[,j] + h
+    }
+}
+
 void _rd_IF_store(`Data' data, `Int' n, | `Bool' append0)
 {
     `Bool' append
@@ -3878,6 +3956,9 @@ void _rd_IF_store(`Data' data, `Int' n, | `Bool' append0)
     else idx = st_varindex(tokens(st_local("IFs")))
     st_store(., idx, data.D.touse, st_data(., idx, data.D.touse) + data.D.IF[data.D.p,])
     st_store(., idx, data.R.touse, st_data(., idx, data.R.touse) + data.R.IF[data.R.p,])
+    if (data.D.bal | data.R.bal) {
+        st_store(., idx, data.bal.T, st_data(., idx, data.bal.T) + data.bal.T_IF)
+    }
 }
 
 `RC' _rd_IF_x_to_y(`RC' y, `Grp' D, `Grp' R, `Int' link)
@@ -4085,17 +4166,13 @@ void _rd_PDFd_IF(`RC' p1, `RC' p0, `RC' atx, `Int' n, `Data' data)
 {
     `Int' j
     
-    // compute IFs
-    data.D.IF = J(rows(data.D.y), n, 0)
-    data.R.IF = J(rows(data.R.y), n, 0)
+    _rd_IF_init(data, n)
     for (j=1;j<=n;j++) {
-        data.D.IF[,j] = 1/data.D.W * 1/p0[j]         * ((data.D.y:==atx[j]) :- p1[j])
-        data.R.IF[,j] = 1/data.R.W * p1[j]/(p0[j]^2) * ((data.R.y:==atx[j]) :- p0[j])
+        _rd_IF_bal(data.bal, j, data.D,
+            1/data.D.W * 1/p0[j]         * ((data.D.y:==atx[j]) :- p1[j]))
+        _rd_IF_bal(data.bal, j, data.R,
+            1/data.R.W * p1[j]/(p0[j]^2) * ((data.R.y:==atx[j]) :- p0[j]))
     }
-    
-    // add balancing weights
-    if (data.D.bal) data.D.IF = data.D.IF :* data.D.wb
-    if (data.R.bal) data.R.IF = data.R.IF :* data.R.wb
 }
 
 void rd_PDFc(`Data' data, `Int' n, `RC' at, `RC' atx, `Int' method)
@@ -4150,11 +4227,12 @@ void rd_PDFc(`Data' data, `Int' n, `RC' at, `RC' atx, `Int' method)
             (st_local("bwtype")=="scalar" ? 
                 st_numscalar(st_local("bwidth")) : 
                 strtoreal(st_local("bwidth"))) :
-            st_local("wmethod"), 
+            st_local("bwmethod"), 
         strtoreal(st_local("bwadjust")), 
         strtoreal(st_local("bwdpi")))
     S.kernel(st_local("kernel"), strtoreal(st_local("adaptive")))
-    S.support((0,1), st_local("boundary")=="lc" ? "linear" : st_local("boundary"), 1)
+    S.support((0,1), st_local("boundary")=="lc" ? "linear" : st_local("boundary"),
+        st_local("bwnord")=="")
     S.n(strtoreal(st_local("napprox")))
     if (S.h()>=.) {
         display("{txt}(bandwidth estimation failed; setting bandwidth to 0.1)")
@@ -4178,8 +4256,7 @@ void _rd_PDFc_IF(`RC' b, `RC' at, `Int' n, `PDF' S, `Data' data)
     pragma unused b
     
     // initialize IFs
-    data.D.IF = J(rows(data.D.y), n, 0)
-    data.R.IF = J(rows(data.R.y), n, 0)
+    _rd_IF_init(data, n)
     
     // CDF of reference distribution at unique values
     cdf = _mm_ecdf2(*data.Y0, data.G0->w)[,2]
@@ -4200,31 +4277,24 @@ void _rd_PDFc_IF(`RC' b, `RC' at, `Int' n, `PDF' S, `Data' data)
     for (j=1;j<=n;j++) {
         // first part of IF
         z = S.K(S.X(), at[j], h, 1)
-        data.G1->IF[,j] = 1/data.G1->W * (z :- mean(z, data.G1->w))
+        _rd_IF_bal(data.bal, j, *data.G1, (z :- mean(z, data.G1->w))/data.G1->W)
             // using mean(z) instead of b[j] ensures that sum(IF)=0
         // second part of IF
         _rd_PDFc_IF2(data, j, cdf, fR, 
             /*delta = */data.G1->w/data.G1->W :* S.Kd(S.X(), at[j], h, 1))
     }
-    
-    // add balancing weights
-    if (data.D.bal) data.D.IF = data.D.IF :* data.D.wb
-    if (data.R.bal) data.R.IF = data.R.IF :* data.R.wb
 }
 
 void _rd_PDFc_IF2(`Data' data, `Int' j, `RM' cdf, `RC' fR, `RC' delta)
 {
-    `RC'  S
-    `RS'  T
-    
-    S = _rd_PDFc_IF2_topsum(*data.Y0, cdf, *data.Y1, data.ranks, delta)
-    T = sum(delta :* data.ranks)
-    data.G0->IF[,j] = data.G0->IF[,j] + (S :- T) / data.G0->W
+    _rd_IF_bal(data.bal, j, *data.G0, 
+        (_rd_PDFc_IF2_lamnda(*data.Y0, cdf, *data.Y1, data.ranks, delta) 
+         :- sum(delta :* data.ranks)) / data.G0->W)
     if (!data.adj.true) return
     _rd_PDFc_IF2_adj(data, data.D, data.R, j, delta :* fR)
 }
 
-`RC' _rd_PDFc_IF2_topsum(`RC' y, `RM' cdf, `RC' x, `RC' r, `RC' d)
+`RC' _rd_PDFc_IF2_lamnda(`RC' y, `RM' cdf, `RC' x, `RC' r, `RC' d)
 {
     `Int' i, j, j1, k
     `RS'  yi
@@ -4293,7 +4363,7 @@ void _rd_PDFc_IF2_adj(`Data' data, `Grp' D, `Grp' R, `Int' j, `RC' dfR)
 {
     `BoolR' aD, aR
     `RC'    y
-    `RC'    tau, IFD, IFR
+    `RC'    tau
     
     // adjustment settings
     aD = (D.adj.location, D.adj.scale, D.adj.shape)
@@ -4305,14 +4375,14 @@ void _rd_PDFc_IF2_adj(`Data' data, `Grp' D, `Grp' R, `Int' j, `RC' dfR)
         // loc:<none> | <none>:loc
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
             tau = sum(dfR :* y) / D.l
-            IFD = -tau * R.l/D.l * D.IFl
-            IFR =  tau * R.IFl
+            _rd_IF_bal(data.bal, j, D, -tau * R.l/D.l * D.IFl)
+            _rd_IF_bal(data.bal, j, R,  tau           * R.IFl)
         }
         // shape:<none> | <none>:shape
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
             tau = sum(dfR :* y) / R.l
-            IFD =  tau * D.IFl
-            IFR = -tau * D.l/R.l * R.IFl
+            _rd_IF_bal(data.bal, j, D,  tau           * D.IFl)
+            _rd_IF_bal(data.bal, j, R, -tau * D.l/R.l * R.IFl)
         }
         else _error(3498) // not reached
     }
@@ -4321,78 +4391,80 @@ void _rd_PDFc_IF2_adj(`Data' data, `Grp' D, `Grp' R, `Int' j, `RC' dfR)
         // loc:<none> | <none>:loc
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
             tau = sum(dfR)
-            IFD = -tau * D.IFl
-            IFR =  tau * R.IFl
+            _rd_IF_bal(data.bal, j, D, -tau * D.IFl)
+            _rd_IF_bal(data.bal, j, R,  tau * R.IFl)
         }
         // loc+scale:<none> | <none>:loc+scale | loc:scale | scale:loc
         else if ((aD==(1,1,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,1,0)) |
                  (aD==(1,0,0) & aR==(0,1,0)) | (aD==(0,1,0) & aR==(1,0,0))) {
             tau = sum(dfR)
-            IFD = -tau * R.s/D.s * D.IFl
-            IFR =  tau * R.IFl
+            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFl)
+            _rd_IF_bal(data.bal, j, R,  tau           * R.IFl)
             tau = sum(dfR :* (y :- D.l)) / D.s
-            IFD = IFD - tau * R.s/D.s * D.IFs
-            IFR = IFR + tau * R.IFs
+            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
+            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
         }
         // scale:<none>
         else if (aD==(0,1,0) & aR==(0,0,0)) {
-            IFD = sum(dfR) * (1-R.s/D.s) * D.IFl
+            _rd_IF_bal(data.bal, j, D, sum(dfR) * (1-R.s/D.s) * D.IFl)
             tau = sum(dfR :* (y :- D.l)) / D.s
-            IFD = IFD - tau * R.s/D.s * D.IFs
-            IFR =       tau * R.IFs
+            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
+            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
         }
         // <none>:scale
         else if (aD==(0,0,0) & aR==(0,1,0)) {
-            IFR = sum(dfR) * (1-R.s/D.s) * R.IFl
+            _rd_IF_bal(data.bal, j, R, sum(dfR) * (1-R.s/D.s) * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / D.s
-            IFD = -tau * R.s/D.s * D.IFs
-            IFR = IFR + tau * R.IFs
+            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
+            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
         }
         // shape:<none> | <none>:shape
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
             tau = sum(dfR)
-            IFD =  tau * D.IFl
-            IFR = -tau * D.s/R.s * R.IFl
+            _rd_IF_bal(data.bal, j, D,  tau           * D.IFl)
+            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / R.s
-            IFD = IFD + tau * D.IFs
-            IFR = IFR - tau * D.s/R.s * R.IFs
+            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
+            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
         }
         // scale+shape:<none> | <none>:scale+shape
         else if ((aD==(0,1,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,1,1))) {
             tau = sum(dfR)
-            IFD =  tau * D.IFl
-            IFR = -tau * R.IFl
+            _rd_IF_bal(data.bal, j, D,  tau * D.IFl)
+            _rd_IF_bal(data.bal, j, R, -tau * R.IFl)
         }
         // loc+shape:<none> | shape:loc
         else if ((aD==(1,0,1) & aR==(0,0,0)) | (aD==(0,0,1) & aR==(1,0,0))) {
-            IFR = sum(dfR) * (1-D.s/R.s) * R.IFl
+            _rd_IF_bal(data.bal, j, R, sum(dfR) * (1-D.s/R.s) * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / R.s
-            IFD = tau * D.IFs
-            IFR = IFR - tau * D.s/R.s * R.IFs
+            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
+            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
         }
         // <none>:loc+shape | loc:shape
         else if ((aD==(0,0,0) & aR==(1,0,1)) | (aD==(1,0,0) & aR==(0,0,1))) {
-            IFD = sum(dfR) * (1-D.s/R.s) * D.IFl
+            _rd_IF_bal(data.bal, j, D, sum(dfR) * (1-D.s/R.s) * D.IFl)
             tau = sum(dfR :* (y :- D.l)) / R.s
-            IFD = IFD + tau * D.IFs
-            IFR =      -tau * D.s/R.s * R.IFs
+            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
+            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
         }
         // shape:scale
         else if (aD==(0,0,1) & aR==(0,1,0)) {
             tau = sum(dfR)
-            IFD =  tau * R.s/D.s * (D.IFl - (D.l-R.l)/D.s * D.IFs)
-            IFR = -tau * (R.s/D.s * R.IFl - (D.l-R.l)/D.s * R.IFs) 
+            _rd_IF_bal(data.bal, j, D,  tau * R.s/D.s * D.IFl)
+            _rd_IF_bal(data.bal, j, R, -tau * R.s/D.s * R.IFl)
+            _rd_IF_bal(data.bal, j, D, -tau * (D.l-R.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF_bal(data.bal, j, R,  tau * (D.l-R.l)/D.s       * R.IFs)
         }
         // scale:shape
         else if (aD==(0,1,0) & aR==(0,0,1)) {
             tau = sum(dfR)
-            IFD =  tau * (D.s/R.s * D.IFl + (D.l-R.l)/R.s * D.IFs)
-            IFR = -tau * D.s/R.s * (R.IFl + (D.l-R.l)/R.s * R.IFs)
+            _rd_IF_bal(data.bal, j, D,  tau * D.s/R.s * D.IFl)
+            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFl)
+            _rd_IF_bal(data.bal, j, D,  tau * (D.l-R.l)/R.s       * D.IFs)
+            _rd_IF_bal(data.bal, j, R, -tau * (D.l-R.l)*D.s/R.s^2 * R.IFs)
         }
         else _error(3498) // not reached
     }
-    data.D.IF[,j] = data.D.IF[,j] + IFD
-    data.R.IF[,j] = data.R.IF[,j] + IFR
 }
 
 /* histogram estimation -----------------------------------------------------*/
@@ -4428,9 +4500,10 @@ void rd_HIST(`Int' n)
 
 `RC' _rd_HIST(`Int' n, `Data' data, | `RC' at, `RC' atx)
 {   // fills in at and atx if specified
-    `Int' i
-    `RC'  b
-    `RM'  IFD, IFR
+    `Bool' bal
+    `Int'  i
+    `RC'   b
+    `RM'   IFD, IFR, IFT
     
     // obtain CDF at thresholds
     at = (1::n-1) / n
@@ -4444,22 +4517,30 @@ void rd_HIST(`Int' n)
     b = ((b\1) :- (0\b)) * n
     // compute IFs
     if (data.nose==0) {
+        bal = (data.D.bal | data.R.bal)
         IFD = n * data.D.IF
         IFR = n * data.R.IF
-        data.D.IF = J(rows(data.D.y), n, 0)
-        data.R.IF = J(rows(data.R.y), n, 0)
+        data.D.IF = J(rows(IFD), n, 0)
+        data.R.IF = J(rows(IFR), n, 0)
+        if (bal) {
+            IFT = n * data.bal.T_IF
+            data.bal.T_IF = J(rows(IFT), n, 0)
+        }
         for (i=1;i<=n;i++) {
             if (i==1) {
                 data.D.IF[,i] = IFD[,i]
                 data.R.IF[,i] = IFR[,i]
+                if (bal) data.bal.T_IF[,i] = IFT[,i]
             }
             else if (i==n) {
                 data.D.IF[,i] = -IFD[,i-1]
                 data.R.IF[,i] = -IFR[,i-1]
+                if (bal) data.bal.T_IF[,i] = -IFT[,i-1]
             }
             else {
                 data.D.IF[,i] = IFD[,i] - IFD[,i-1]
                 data.R.IF[,i] = IFR[,i] - IFR[,i-1]
+                if (bal) data.bal.T_IF[,i] = IFT[,i] - IFT[,i-1]
             }
         }
     }
@@ -4627,8 +4708,7 @@ void _rd_CDF_IF(`RC' b, `RC' at, `Int' n, `Data' data, `Grp' D, `Grp' R, `Grp' G
     pragma unused b
     
     // initialize IFs
-    D.IF = J(rows(D.y), n, 0)
-    R.IF = J(rows(R.y), n, 0)
+    _rd_IF_init(data, n)
     
     // transform quantiles to raw scales and obtain density estimates
     qR = _mm_quantile(G0.y, G0.w, at)
@@ -4639,29 +4719,24 @@ void _rd_CDF_IF(`RC' b, `RC' at, `Int' n, `Data' data, `Grp' D, `Grp' R, `Grp' G
     // compute IFs
     for (j=1;j<=n;j++) {
         z = (G1.y :<= qD[j])
-        G1.IF[,j] = 1/G1.W * (z :- mean(z, G1.w))
+        _rd_IF_bal(data.bal, j, G1, (z :- mean(z, G1.w)) / G1.W)
             // using mean(z) instead of b[j] ensures that sum(IF)=0
         z = (G0.y :<= qR[j])
         _rd_CDF_IF2(data, G0, D, R, j, qD[j], qR[j], fD[j],
             /*IF(q)=*/(mean(z, G0.w) :- z) / (fR[j]*G0.W))
             // using mean(z) instead of at[j] ensures that sum(IF)=0
     }
-    
-    // add balancing weights
-    if (D.bal) D.IF = D.IF :* D.wb
-    if (R.bal) R.IF = R.IF :* R.wb
 }
 
 void _rd_CDF_IF2(`Data' data, `Grp' G0, `Grp' D, `Grp' R, `Int' j, `RS' qD, `RS' qR, 
-    `RS' fD, `RC' IFq) // IFq assumed fleeting (ok to replace)
+    `RS' fD, `RC' IFq)
 {
     `BoolR' aD, aR
-    `RS'    q
-    `RC'    IFD, IFR
+    `RS'    q, f0, f1
     
     // no adjustment
     if (!data.adj.true) {
-        R.IF[,j] = R.IF[,j] + fD * IFq
+        _rd_IF_bal(data.bal, j, G0, fD * IFq)
         return
     }
     // adjustment settings
@@ -4672,96 +4747,114 @@ void _rd_CDF_IF2(`Data' data, `Grp' G0, `Grp' D, `Grp' R, `Int' j, `RS' qD, `RS'
         // loc:<none> | <none>:loc
         //  t(q) = q * mu_D / mu_R
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
-            IFq = D.l/R.l * IFq
-            IFD = qR/R.l * D.IFl
-            IFR = -qR * D.l/R.l^2 * R.IFl
+            _rd_IF_bal(data.bal, j, G0, fD * D.l/R.l         * IFq)
+            _rd_IF_bal(data.bal, j,  D, fD * qR/R.l          * D.IFl)
+            _rd_IF_bal(data.bal, j,  R, fD * -qR * D.l/R.l^2 * R.IFl)
         }
         // shape:<none> | <none>:shape
         //  t(q) = q * mu_R / mu_D
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
-            IFq = R.l/D.l * IFq
-            IFR = qR/D.l * R.IFl
-            IFD = -qR * R.l/D.l^2 * D.IFl
+            _rd_IF_bal(data.bal, j, G0, fD * R.l/D.l         * IFq)
+            _rd_IF_bal(data.bal, j,  D, fD * -qR * R.l/D.l^2 * D.IFl)
+            _rd_IF_bal(data.bal, j,  R, fD * qR/D.l          * R.IFl )
         }
         else _error(3498) // not reached
     }
     // linear t(q) or logarithmic adjustment exp(t(ln q)
     else {
-        if (data.adj.link) q = ln(qR)
-        else               q = qR
+        if (data.adj.link) {
+            q = ln(qR)
+            f0 = fD * qD/qR; f1 = fD * qD
+        }
+        else {
+            q = qR
+            f0 = f1 = fD
+        }
         // loc:<none> | <none>:loc
         //  t(q) = q - mu_R + mu_D
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
-            IFD =  D.IFl
-            IFR = -R.IFl
+            _rd_IF_bal(data.bal, j, G0,  f0 * IFq)
+            _rd_IF_bal(data.bal, j,  D,  f1 * D.IFl)
+            _rd_IF_bal(data.bal, j,  R, -f1 * R.IFl)
         }
         // loc+scale:<none> | <none>:loc+scale | loc:scale | scale:loc
         //  t(q) = (q - mu_R)*s_D/s_R + mu_D
         else if ((aD==(1,1,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,1,0)) |
                  (aD==(1,0,0) & aR==(0,1,0)) | (aD==(0,1,0) & aR==(1,0,0))) {
-            IFq = D.s/R.s * IFq
-            IFD = (q-R.l)/R.s * D.IFs + D.IFl
-            IFR = -D.s/R.s * (R.IFl + (q-R.l)/R.s * R.IFs)
+            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1                      * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * (q-R.l)/R.s        * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * -D.s/R.s           * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
         }
         // scale:<none>
         //  t(q) = (q - mu_D)*s_D/s_R + mu_D
         else if (aD==(0,1,0) & aR==(0,0,0)) {
-            IFq = D.s/R.s * IFq
-            IFD = -D.s/R.s * D.IFl + (q-D.l)/R.s * D.IFs + D.IFl
-            IFR = -D.s/R.s * (q-D.l)/R.s * R.IFs
+            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * (1 - D.s/R.s)      * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * (q-D.l)/R.s        * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * -(q-D.l)*D.s/R.s^2 * R.IFs)
         }
         // <none>:scale
         //  t(q) = (q - mu_R)*s_D/s_R + mu_R
         else if (aD==(0,0,0) & aR==(0,1,0)) {
-            IFq = D.s/R.s * IFq
-            IFD = (q-R.l)/R.s * D.IFs
-            IFR = -D.s/R.s * (R.IFl + (q-R.l)/R.s * R.IFs) + R.IFl
+            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * (q-R.l)/R.s        * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * (1 - D.s/R.s)      * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
         }
         // shape:<none> | <none>:shape
         //  t(q) = (q - mu_D)*s_R/s_D + mu_R
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
-            IFq = R.s/D.s * IFq
-            IFD = -R.s/D.s * (D.IFl + (q-D.l)/D.s * D.IFs)
-            IFR = (q-D.l)/D.s * R.IFs + R.IFl
+            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * -R.s/D.s           * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1                      * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * (q-D.l)/D.s        * R.IFs)
         }
         // scale+shape:<none> | <none>:scale+shape
         //  t(q) = q - mu_D + mu_R
         else if ((aD==(0,1,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,1,1))) {
-            IFD = -D.IFl
-            IFR =  R.IFl
+            _rd_IF_bal(data.bal, j, G0,  f0 * IFq)
+            _rd_IF_bal(data.bal, j,  D, -f1 * D.IFl)
+            _rd_IF_bal(data.bal, j,  R,  f1 * R.IFl)
         }
         // loc+shape:<none> | shape:loc
         //  t(q) = (q - mu_R)*s_R/s_D + mu_R
         else if ((aD==(1,0,1) & aR==(0,0,0)) | (aD==(0,0,1) & aR==(1,0,0))) {
-            IFq = R.s/D.s * IFq
-            IFD = -R.s/D.s * (q-R.l)/D.s * D.IFs
-            IFR = -R.s/D.s * R.IFl + (q-R.l)/D.s * R.IFs + R.IFl
+            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * -(q-R.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * (1 - R.s/D.s)      * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * (q-R.l)/D.s        * R.IFs)
          }
         // <none>:loc+shape | loc:shape
         //  t(q) = (q - mu_D)*s_R/s_D + mu_D
         else if ((aD==(0,0,0) & aR==(1,0,1)) | (aD==(1,0,0) & aR==(0,0,1))) {
-            IFq = R.s/D.s * IFq
-            IFD = -R.s/D.s * (D.IFl + (q-D.l)/D.s * D.IFs) + D.IFl
-            IFR = (q-D.l)/D.s * R.IFs
+            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * (1 - R.s/D.s)      * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * (q-D.l)/D.s        * R.IFs)
         }
         // shape:scale
         //  t(q) = q + (mu_R-mu_D)*s_R/s_D
         else if (aD==(0,0,1) & aR==(0,1,0)) {
-            IFD = -R.s/D.s * (D.IFl + (R.l-D.l)/D.s * D.IFs)
-            IFR =  R.s/D.s * R.IFl + (R.l-D.l)/D.s * R.IFs
+            _rd_IF_bal(data.bal, j, G0, f0                        * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * -R.s/D.s             * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * -(R.l-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * R.s/D.s              * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * (R.l-D.l)/D.s        * R.IFs)
         }
         // scale:shape
         //  t(q) = q + (mu_R-mu_D)*s_D/s_R
         else if (aD==(0,1,0) & aR==(0,0,1)) {
-            IFD = -D.s/R.s * D.IFl + (R.l-D.l)/R.s * D.IFs
-            IFR =  D.s/R.s * (R.IFl - (R.l-D.l)/R.s * R.IFs)
+            _rd_IF_bal(data.bal, j, G0, f0                        * IFq)
+            _rd_IF_bal(data.bal, j,  D, f1 * -D.s/R.s             * D.IFl)
+            _rd_IF_bal(data.bal, j,  D, f1 * (R.l-D.l)/R.s        * D.IFs)
+            _rd_IF_bal(data.bal, j,  R, f1 * D.s/R.s              * R.IFl)
+            _rd_IF_bal(data.bal, j,  R, f1 * -(R.l-D.l)*D.s/R.s^2 * R.IFs)
         }
         else _error(3498) // not reached
-        if (data.adj.link) {; IFq = qD/qR * IFq; IFD = qD * IFD; IFR = qD * IFR; }
     }
-    G0.IF[,j] = G0.IF[,j] + fD * IFq
-    D.IF[,j]  = D.IF[,j] + fD * IFD
-    R.IF[,j]  = R.IF[,j] + fD * IFR
 }
 
 /* Divergence estimation ---------------------------------------------------*/
@@ -4771,7 +4864,7 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
     `Int'  k
     `RS'   h, h0
     `RC'   b, b0, p
-    `RM'   IFD, IFR
+    `RM'   IFD, IFR, IFT
     `SR'   stats
     `SM'   cstripe
     `Data' data
@@ -4789,6 +4882,7 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
         if (data.nose==0) {
             IFD = data.D.IF
             IFR = data.R.IF
+            if (data.D.bal | data.R.bal) IFT = data.bal.T_IF
         }
         _rd_DIV_lswap(0)
         b0 = _rd_DIV(data, stats, h0)
@@ -4816,6 +4910,10 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
             data.R.IF = IFR, data.R.IF, IFR-data.R.IF
             data.D.IF = data.D.IF[,p]
             data.R.IF = data.R.IF[,p]
+            if (data.D.bal | data.R.bal) {
+                data.bal.T_IF = IFT, data.bal.T_IF, IFT-data.bal.T_IF
+                data.bal.T_IF = data.bal.T_IF[,p]
+            }
         }
         if (st_local("pdf")!="") st_matrix(BWnm, (h, h0)) 
     }
@@ -4838,15 +4936,17 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
 
 `RC' _rd_DIV(`Data' data, `SR' stats, `RS' h)
 {
+    `Bool' bal
     `Int'  n, j, k
     `Int'  entropy, chi2, tvd
     `RC'   b, d, at, atx, p0, p1
-    `RM'   IFD, IFR
+    `RM'   IFD, IFR, IFT
     pragma unset p1
     pragma unset p0
     
     // prepare data
     rd_getdata(data)
+    bal = (data.D.bal | data.R.bal)
     
     // compute divergence
     k = length(stats)
@@ -4870,17 +4970,21 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
         if (data.nose==0) {
             IFD = J(rows(data.D.y), k, 0)
             IFR = J(rows(data.R.y), k, 0)
+            if (bal) IFT = J(data.bal.T_N, k, 0)
             if (entropy) {
                 IFD[,entropy] = rowsum((1:+ln(d'))/n :* data.D.IF)
                 IFR[,entropy] = rowsum((1:+ln(d'))/n :* data.R.IF)
+                if (bal) IFT[,entropy] = rowsum((1:+ln(d'))/n :* data.bal.T_IF)
             }
             if (chi2) {
                 IFD[,chi2] = rowsum((d':-1)*(2/n) :* data.D.IF)
                 IFR[,chi2] = rowsum((d':-1)*(2/n) :* data.R.IF)
+                if (bal) IFT[,chi2] = rowsum((d':-1)*(2/n) :* data.bal.T_IF)
             }
             if (tvd) {
                 IFD[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.D.IF)
                 IFR[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.R.IF)
+                if (bal) IFT[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.bal.T_IF)
             }
         }
     }
@@ -4895,27 +4999,31 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
         if (chi2)    b[chi2]    = sum((p1 - p0):^2 :/ p0)
         if (tvd)     b[tvd]     = sum(abs(p1 - p0))/2
         if (data.nose==0) {
-            data.D.IF = J(rows(data.D.y), n, 0)
-            data.R.IF = J(rows(data.R.y), n, 0)
+            _rd_IF_init(data, n)
             for (j=1;j<=n;j++) {
-                data.D.IF[,j] = ((data.D.y:==atx[j]) :- p1[j]) / data.D.W
-                data.R.IF[,j] = ((data.R.y:==atx[j]) :- p0[j]) / data.R.W
+                _rd_IF_bal(data.bal, j, data.D, ((data.D.y:==atx[j]) :- p1[j])/data.D.W)
+                _rd_IF_bal(data.bal, j, data.R, ((data.R.y:==atx[j]) :- p0[j])/data.R.W)
             }
-            if (data.D.bal) data.D.IF = data.D.IF :* data.D.wb
-            if (data.R.bal) data.R.IF = data.R.IF :* data.R.wb
             IFD = J(rows(data.D.y), k, 0)
             IFR = J(rows(data.R.y), k, 0)
+            if (bal) IFT = J(data.bal.T_N, k, 0)
             if (entropy) {
                 IFD[,entropy] = rowsum( (1:+ln(p1):-ln(p0))' :* data.D.IF)
                 IFR[,entropy] = rowsum(-(p1:/p0)' :* data.R.IF)
+                if (data.D.bal) IFT[,entropy] = rowsum( (1:+ln(p1):-ln(p0))' :* data.bal.T_IF)
+                if (data.R.bal) IFT[,entropy] = rowsum(-(p1:/p0)' :* data.bal.T_IF)
             }
             if (chi2) {
                 IFD[,chi2] = rowsum(2*(p1:/p0:-1)' :* data.D.IF)
                 IFR[,chi2] = rowsum((1:-(p1:/p0):^2)' :* data.R.IF)
+                if (data.D.bal) IFT[,chi2] = rowsum(2*(p1:/p0:-1)' :* data.bal.T_IF)
+                if (data.R.bal) IFT[,chi2] = rowsum((1:-(p1:/p0):^2)' :* data.bal.T_IF)
             }
             if (tvd) {
                 IFD[,tvd] = rowsum( sign(p1:-p0)'/2 :* data.D.IF)
                 IFR[,tvd] = rowsum(-sign(p1:-p0)'/2 :* data.R.IF)
+                if (data.D.bal) IFT[,tvd] = rowsum( sign(p1:-p0)'/2 :* data.bal.T_IF)
+                if (data.R.bal) IFT[,tvd] = rowsum(-sign(p1:-p0)'/2 :* data.bal.T_IF)
             }
         }
     }
@@ -4924,6 +5032,7 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
     if (data.nose==0) {
         data.D.IF = IFD
         data.R.IF = IFR
+        if (bal) data.bal.T_IF = IFT
     }
     return(b)
 }
@@ -4933,9 +5042,9 @@ void _rd_DIV_lswap(`Bool' revert)
     `Int' i
     `SR'  lnm
     
-    lnm = ("adj1", "adj0", "adjmean", "adjsd", "adjlog", "adjmult",
-        "bal_varlist", "bal_method", "bal_name", "bal_noisily", "bal_ref",
-        "bal_contrast", "bal_wvar", "bal_nowarn", "bal_opts", "bwidth")
+    lnm = ("bwidth", "adj1", "adj0", "adjmean", "adjsd", "adjlog", "adjmult",
+        "bal_varlist", "bal_method", "bal_noisily", "bal_ref", "bal_contrast", 
+        "bal_opts", "bal_ebopts", "BAL_WVAR")
     if (revert) {
         for (i=length(lnm); i; i--) {
             st_local(lnm[i], st_local("tmp_"+lnm[i]))
@@ -4985,8 +5094,7 @@ void _rd_MRP_IF(`RR' b, `RC' d, `Data' data)
     `RM' cdf
     
     // initialize IFs
-    data.D.IF = J(rows(data.D.y), 3, 0)
-    data.R.IF = J(rows(data.R.y), 3, 0)
+    _rd_IF_init(data, 3)
 
     // CDF of reference distribution at unique values
     cdf = _mm_ecdf2(*data.Y0, data.G0->w)[,2]
@@ -5003,20 +5111,16 @@ void _rd_MRP_IF(`RR' b, `RC' d, `Data' data)
     }
     
     // MRP
-    data.D.IF[,1] = 1/data.G1->W * ((4*abs(d) :- 1) :- b[1])
+    _rd_IF_bal(data.bal, 1, data.D, 1/data.G1->W * ((4*abs(d) :- 1) :- b[1]))
     _rd_PDFc_IF2(data, 1, cdf, fR, 4/data.G1->W * (data.G1->w :* sign(d)))
     
     // LRP
-    data.D.IF[,2] = 1/data.G1->W * (((8 * -d :* (d:<0)) :- 1) :- b[2])
+    _rd_IF_bal(data.bal, 2, data.D, 1/data.G1->W * (((8 * -d :* (d:<0)) :- 1) :- b[2]))
     _rd_PDFc_IF2(data, 2, cdf, fR, -8/data.G1->W * data.G1->w :* (d:<0))
     
     // URP
-    data.D.IF[,3] = 1/data.G1->W * (((8 *  d :* (d:>0)) :- 1) :- b[3])
+    _rd_IF_bal(data.bal, 3, data.D, 1/data.G1->W * (((8 *  d :* (d:>0)) :- 1) :- b[3]))
     _rd_PDFc_IF2(data, 3, cdf, fR, 8/data.G1->W * data.G1->w :* (d:>0))
-    
-    // add balancing weights
-    if (data.D.bal) data.D.IF = data.D.IF :* data.D.wb
-    if (data.R.bal) data.R.IF = data.R.IF :* data.R.wb
 }
 
 /* Summary statistics estimation --------------------------------------------*/
@@ -5071,8 +5175,8 @@ void rd_SUM(`SS' bnm)
     }
 
     // return results
-    if (st_local("generate")!="") {
-        st_store(., st_local("ranks"), data.G1->touse, data.ranks[data.G1->p])
+    if (st_local("GENERATE")!="") {
+        st_store(., st_local("GENERATE"), data.G1->touse, data.ranks[data.G1->p])
     }
     st_matrix(bnm, b)
     st_matrixcolstripe(bnm, (J(n,1,""), stats'))
@@ -5098,7 +5202,7 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
     `SS'   stat
     `RC'   fR
     `RM'   cdf
-    `RM'   IFD, IFR
+    `RM'   IFD, IFR, IFT
     pragma unset cdf
     pragma unset fR
     
@@ -5107,40 +5211,38 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
         _rd_CDF_IF(q, p, rows(p), data, data.R, data.D, *data.G0, *data.G1)
         IFD = data.D.IF
         IFR = data.R.IF
+        if (data.D.bal | data.R.bal) IFT = data.bal.T_IF
     }
     
     // initialize IFs
-    data.D.IF = J(rows(data.D.y), n, 0)
-    data.R.IF = J(rows(data.R.y), n, 0)
+    _rd_IF_init(data, n)
     
     // compute IFs
     j = 0
     for (i=1;i<=n;i++) {
         stat = stats[i]
-        if (substr(stat,1,1)=="p") _rd_SUM_q_IF(data, i, IFD, IFR, ++j)
-        else if (stat=="median")   _rd_SUM_q_IF(data, i, IFD, IFR, ++j)
-        else if (stat=="iqr")      _rd_SUM_iqr_IF(data, i, IFD, IFR, ++j)
+        if (substr(stat,1,1)=="p") _rd_SUM_q_IF(data, i, IFD, IFR, IFT, ++j)
+        else if (stat=="median")   _rd_SUM_q_IF(data, i, IFD, IFR, IFT, ++j)
+        else if (stat=="iqr")      _rd_SUM_iqr_IF(data, i, IFD, IFR, IFT, ++j)
         else if (stat=="mean")     _rd_SUM_mean_IF(data, i, b[i], cdf, fR)
         else if (stat=="variance") _rd_SUM_var_IF(data, i, b[i], cdf, fR)
         else if (stat=="sd")       _rd_SUM_sd_IF(data, i, b[i], cdf, fR)
         else _error(3498) // not reached
     }
-    
-    // add balancing weights
-    if (data.D.bal) data.D.IF = data.D.IF :* data.D.wb
-    if (data.R.bal) data.R.IF = data.R.IF :* data.R.wb
 }
 
-void _rd_SUM_q_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `Int' j)
+void _rd_SUM_q_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `RM' IFT, `Int' j)
 {
     data.D.IF[,i] = IFD[,j]
     data.R.IF[,i] = IFR[,j]
+    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = IFT[,j]
 }
 
-void _rd_SUM_iqr_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `Int' j)
+void _rd_SUM_iqr_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `RM' IFT, `Int' j)
 {
     data.D.IF[,i] = IFD[,j] - IFD[,j+1]
     data.R.IF[,i] = IFR[,j] - IFR[,j+1]
+    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = IFT[,j] - IFT[,j+1]
     ++j
 }
 
@@ -5167,8 +5269,7 @@ void _rd_SUM_mean_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
 {
     _rd_SUM_IF_fR(data, cdf, fR)
     // first part of IF
-    
-    data.G1->IF[,i] = (data.ranks :- b) / data.G1->W
+    _rd_IF_bal(data.bal, i, *data.G1, (data.ranks :- b) / data.G1->W)
     // second part of IF
     _rd_PDFc_IF2(data, i, cdf, fR, (data.wtype ? data.G1->w/data.G1->W : 
         J(data.G1->N, 1, data.G1->w/data.G1->W))) 
@@ -5185,7 +5286,7 @@ void _rd_SUM_var_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
     if (data.wtype>=2) c = 1 / (1 - 1/data.G1->N)
     else               c = 1 / (1 - 1/data.G1->W)
     if (rows(data.ranks)==1) c = 1
-    data.G1->IF[,i] = (c:*rdev:^2 :- b) / data.G1->W
+    _rd_IF_bal(data.bal, i, *data.G1, (c:*rdev:^2 :- b) / data.G1->W)
     // second part of IF
     _rd_PDFc_IF2(data, i, cdf, fR, 2/data.G1->W * c :* data.G1->w :* rdev)
 }
@@ -5195,6 +5296,7 @@ void _rd_SUM_sd_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
     _rd_SUM_var_IF(data, i, b^2, cdf, fR)
     data.D.IF[,i] = data.D.IF[,i] / (2*b)
     data.R.IF[,i] = data.R.IF[,i] / (2*b)
+    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = data.bal.T_IF[,i] / (2*b)
 }
 
 end

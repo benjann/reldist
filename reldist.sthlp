@@ -1,5 +1,5 @@
 {smcl}
-{* 18sep2020}{...}
+{* 26sep2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -91,6 +91,8 @@ help for {hi:reldist}{...}
 {synopt:{opt nomid}}do not use midpoints when computing relative ranks
     {p_end}
 {synopt:{opt desc:ending}}sort tied observations in descending order of weights
+    {p_end}
+{synopt:{opt r:eplace}}allow replacing existing variables
     {p_end}
 
 {syntab:{help reldist##pdfopts:Subcommand {bf:pdf}}}
@@ -193,8 +195,6 @@ help for {hi:reldist}{...}
     specified statistics
     {p_end}
 {synopt:{opth g:enerate(newvar)}}store the relative ranks in {it:newvar}
-    {p_end}
-{synopt:{opt r:eplace}}replace existing variable
     {p_end}
 
 {syntab:{help reldist##seopts:SE/CI}}
@@ -311,7 +311,9 @@ help for {hi:reldist}{...}
 
 {pstd}
     {cmd:reldist} provides a set of tools for relative distribution analysis. For
-    background information see Handcock and Morris (1998, 1999).
+    background information see Handcock and Morris (1998, 1999). For methods and
+    formulas used by {cmd:reldist} see
+    {browse "http://ideas.repec.org/p/bss/wpaper/37.html":Jann (2020)}.
 
 {phang}
     o  Command {cmd:reldist pdf} estimates the density function of the
@@ -362,10 +364,7 @@ help for {hi:reldist}{...}
     sample (paired relative distribution).
 
 {pstd}
-    {cmd:reldist} requires {cmd:kmatch} and {cmd:moremata}
-    to be installed on the system. See
-    {net "describe kmatch, from(http://fmwww.bc.edu/repec/bocode/k/)":{bf:ssc describe kmatch}}
-    and
+    {cmd:reldist} requires {cmd:moremata} to be installed on the system. See
     {net "describe moremata, from(http://fmwww.bc.edu/repec/bocode/m/)":{bf:ssc describe moremata}}.
 
 
@@ -533,6 +532,11 @@ help for {hi:reldist}{...}
     if there are no weights. Furthermore, it has no effect
     for {cmd:reldist histogram} and {cmd:reldist cdf}.
 
+{phang}
+    {opt replace} allows replacing existing variables. This is relevant for
+    {cmd:generate()} with {cmd:reldist summarize} and {cmd:generate()}
+    in {cmd:balance()}.
+
 {marker pdfopts}{...}
 {dlgtab:For subcommand -pdf-}
 
@@ -560,7 +564,7 @@ help for {hi:reldist}{...}
     probability scale. All outcome values across both distributions will be
     considered. To restrict the evaluation points to outcome values from the
     comparison distribution or from the reference distribution, specify
-    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively, 
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively,
     specify a grid of custom values, either by providing a
     {help numlist:{it:numlist}} or the name of a matrix containing the values
     (the values will be taken from the first row or the first column of the
@@ -601,7 +605,7 @@ help for {hi:reldist}{...}
 
 {marker bwidth}{...}
 {phang2}
-    {opt bwidth(#|method)} determines the bandwidth of the kernel, the
+    {cmd:bwidth(}{it:#}|{it:method}[{cmd:,} {cmd:nord}]{cmd:)} determines the bandwidth of the kernel, the
     halfwidth of the estimation window around each evaluation point. Use
     {opt bwidth(#)}, {it:#} > 0, to set the bandwidth to a specific value. Alternatively,
     type {opt bwidth(method)} to choose an automatic bandwidth selection
@@ -612,6 +616,11 @@ help for {hi:reldist}{...}
     specifies the number of stages of functional estimation; default is 2), or
     {opt isj} (diffusion estimator bandwidth). The default
     is {cmd:bw(sjpi)}.
+
+{pmore2}
+    By default, if estimating the density of the relative data, all bandwidth selectors
+    include a correction for relative data based on Cwik and Mielniczuk (1993). Specify
+    suboption {cmd:nord} to omit the correction.
 
 {phang2}
     {opt bwadjust(#)} multiplies the bandwidth by
@@ -740,7 +749,7 @@ help for {hi:reldist}{...}
     probability scale. All outcome values across both distributions will be
     considered. To restrict the evaluation points to outcome values from the
     comparison distribution or from the reference distribution, specify
-    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively, 
+    {cmd:atx(comparison)} or {cmd:atx(reference)}, respectively. Alternatively,
     specify a grid of custom values, either by providing a
     {help numlist:{it:numlist}} or the name of a matrix containing the values
     (the values will be taken from the first row or the first column of the
@@ -897,9 +906,6 @@ help for {hi:reldist}{...}
     variable {it:newvar}. Depending on {cmd:adjust()}, different observations
     may be filled in.
 
-{phang}
-    {opt replace} allows replacing an existing variable.
-
 {marker seopts}{...}
 {dlgtab:SE/CI}
 
@@ -924,8 +930,10 @@ help for {hi:reldist}{...}
     on influence functions. Likewise, {bind:{cmd:vce(cluster} {it:clustvar}{cmd:)}} computes
     influence-function based standard errors allowing for intragroup correlation,
     where {it:clustvar} specifies to which group each observation
-    belongs. In both cases, {help reldist##density_options:{it:density_options}} specify the details
-    of density estimation employed during the computation of the influence functions.
+    belongs. In both cases, {help reldist##density_options:{it:density_options}} specify
+    specify how auxiliary densities are estimated during the computation of the
+    influence functions (option {cmd:boundary()} will have no effect; unbounded support
+    is assumed for auxiliary densities).
 
 {pmore}
     {cmd:vce(svy)} computes standard errors taking the survey design as set by
@@ -934,7 +942,7 @@ help for {hi:reldist}{...}
     the {helpb svy} prefix. If {help svy##svy_vcetype:{it:svy_vcetype}} is set to {cmd:linearized}, the
     standard errors are estimated based on influence functions; use
     {help reldist##density_options:{it:density_options}} to specify the details
-    of density estimation in this case. For
+    of auxiliary density estimation in this case. For
     {help svy##svy_vcetype:{it:svy_vcetype}} other than {cmd:linearized}, {it:density_options}
     are not allowed.
 
@@ -1466,7 +1474,7 @@ help for {hi:reldist}{...}
 {title:Methods and formulas}
 
 {pstd}
-    Methods and formulas used by {cmd:reldist} are described in
+    Methods and formulas used by {cmd:reldist} are documented in
     {browse "http://ideas.repec.org/p/bss/wpaper/37.html":Jann (2020)}.
 
 
@@ -1576,6 +1584,10 @@ help for {hi:reldist}{...}
 {marker references}{...}
 {title:References}
 
+{phang}
+    Cwik, J., J. Mielniczuk (1993). Data-dependent bandwidth choice for a grade density
+    kernel estimate. Statistics & Probability Letters 16: 397-405.
+    {p_end}
 {phang}
     Handcock, Mark S., Martina Morris (1998). Relative Distribution Methods.
     Sociological Methodology 28: 53-97.

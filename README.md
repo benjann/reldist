@@ -36,6 +36,18 @@ Installation from GitHub:
 
 Main changes:
 
+    26sep2020 (version 1.2.1)
+    - balance() reimplemented; balancing weights are no longer assumed fixed when
+      computing standard errors
+    - option -replace- is now allowed with all subcommands so that balance(, generate())
+      can overwrite existing variables
+    - suboption -nord- added in bwidth() to omit the RD correction that is applied to
+      bandwidth selectors by default
+    - reldist pdf used the SJPI bandwidth selector even if a different bandwidth 
+      selector was specified in bwidth(method); this if fixed
+    - reldist div: compare(balance(,generate())) did not store the variable; this
+      is fixed
+    
     18sep2020 (version 1.2.0)
     - major update with many changes:
       o analytic standard errors are now computed for all estimates (based on 
