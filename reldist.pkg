@@ -3,7 +3,7 @@ d reldist: Stata module for relative distribution analysis
 d 
 d Author: Ben Jann, University of Bern, ben.jann@soz.unibe.ch
 d
-d Distribution-Date: 20200926
+d Distribution-Date: 20200927
 f reldist_svyr.ado
 f reldist.ado
 f reldist.sthlp

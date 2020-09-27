@@ -1,4 +1,4 @@
-*! version 1.2.1  26sep2020  Ben Jann
+*! version 1.2.2  27sep2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -432,8 +432,8 @@ program PREDICT_compute_IFs
         local cmdline `cmdline' adjust(`e(adjust)':`e(refadjust)',/*
             */ `e(adjmean)' `e(adjsd)' `e(adjlog)' `e(adjmult)')
     }
-    // - nobreak, nomid, descending
-    local cmdline `cmdline' `e(nobreak)' `e(nomid)' `e(descending)'
+    // - nobreak, nomid, descending, nostable
+    local cmdline `cmdline' `e(nobreak)' `e(nomid)' `e(descending)' `e(nostable)'
     // - PDF or CDF
     if "`SUBCMD'"=="PDF" | "`SUBCMD'"=="CDF" {
         local cmdline `cmdline' `e(categorical)' `e(discrete)'
@@ -2087,12 +2087,11 @@ program PDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
-        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
+        NOBReak NOMID DESCending NOSTAble ADJust(str) BALance(str) ///
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         HISTogram HISTogram2(numlist int >0 max=1) alt ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace * ]
-    if "`nobreak'"!="" local descending
     Get_densityopts dopts, `options'
     Parse_densityopts, `dopts'
     if "`bwtype'"=="matrix" {
@@ -2103,11 +2102,6 @@ program PDF, eclass
     }
     Parse_vce `vce'
     Parse_at "`n'" `"`at'"' "`atx'" `"`atx2'"' "`discrete'" "`categorical'"
-    if "`discrete'"!="" {
-        local nobreak
-        local nomid
-        local descending
-    }
     Parse_cat_notallowed "`discrete'" "`categorical'" `"`adjust'"' `"`histogram'`histogram2'"'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
@@ -2194,13 +2188,10 @@ program HIST, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
-        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
+        NOBReak NOMID DESCending NOSTAble ADJust(str) BALance(str) ///
         n(numlist int >0 max=1) alt DISCRete CATegorical ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
-    local nobreak
-    local nomid
-    local descending
     Parse_vce `vce'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
@@ -2271,13 +2262,10 @@ program CDF, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
-        NOBReak NOMID DESCending ADJust(str) BALance(str) ///
+        NOBReak NOMID DESCending NOSTAble ADJust(str) BALance(str) ///
         n(numlist int >1 max=1) at(str) atx ATX2(str) DISCRete CATegorical alt ///
         NOOGRID ogrid(numlist int >0 max=1) ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
-    local nobreak
-    local nomid
-    local descending
     Parse_vce `vce'
     if "`categorical'"!="" {
         if `"`adjust'"'!="" {
@@ -2351,7 +2339,8 @@ program DIV, eclass
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
         ENtropy kl CHI2 CHISQuared tvd DISsimilarity all ///
-        NOBReak NOMID DESCending ADJust(str) BALance(str) Over(varname numeric) ///
+        NOBReak NOMID DESCending NOSTAble ///
+        ADJust(str) BALance(str) Over(varname numeric) ///
         n(numlist int >0 max=1) alt DISCRete CATegorical PDF ///
         COMpare COMpare2(str) ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace * ]
@@ -2369,7 +2358,6 @@ program DIV, eclass
     Get_densityopts dopts, `options'
     Parse_densityopts, `dopts'
     if "`pdf'"!="" {
-        if "`nobreak'"!="" local descending
         local c_bwidth `"`bwidth'"'
         if "`bwtype'"=="matrix" {
             local bwtype0 "matrix"
@@ -2381,11 +2369,6 @@ program DIV, eclass
             }
             local bwtype "scalar"
         }
-    }
-    else {
-        local nobreak nobreak
-        local nomid nomid
-        local descending
     }
     Parse_vce `vce'
     Parse_adjust `adjust'
@@ -2402,9 +2385,6 @@ program DIV, eclass
         }
         local discrete discrete // categorical implies discrete
         local atx atx // required by rd_PDF()
-        local nobreak nobreak
-        local nomid nomid
-        local descending
     }
     else {
         if "`pdf'"!=""  Parse_n "`n'" 100
@@ -2599,10 +2579,9 @@ program MRP, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
-        NOBReak NOMID DESCending BALance(str) Over(varname numeric) ///
+        NOBReak NOMID DESCending NOSTAble BALance(str) Over(varname numeric) ///
         SCale SCale2(str) MULTiplicative LOGarithmic REFerence ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
-    if "`nobreak'"!="" local descending
     Parse_vce `vce'
     if `"`scale2'"'!="" local scale scale
     if "`reference'"!="" local adj adj0
@@ -2699,10 +2678,10 @@ program SUM, eclass
     // syntax
     Parse_syntax `0'
     syntax [if] [in] [fw iw pw/], [ ///
-        NOBReak NOMID DESCending ADJust(str) BALance(str) Over(varname numeric) ///
+        NOBReak NOMID DESCending NOSTAble ///
+        ADJust(str) BALance(str) Over(varname numeric) ///
         Statistics(str) Generate(name) ///
         vce(str) NOSE Level(cilevel) _ifgenerate(namelist) Replace ]
-    if "`nobreak'"!="" local descending
     Parse_vce `vce'
     Parse_adjust `adjust'
     Parse_balance "`by'" "`pooled'" `balance'
@@ -3002,6 +2981,7 @@ void rd_Post_common_e()
     st_global("e(nobreak)",    st_local("nobreak"))
     st_global("e(nomid)",      st_local("nomid"))
     st_global("e(descending)", st_local("descending"))
+    st_global("e(nostable)",   st_local("nostable"))
     st_global("e(adjust)",     st_local("adj1"))
     st_global("e(refadjust)",  st_local("adj0"))
     st_global("e(adjmean)",    st_local("adjmean"))
@@ -3207,10 +3187,12 @@ struct `GADJ' {
 struct `GRP' {
     `Int'   touse      // Stata variable marking sample
     `RC'    yvar       // Stata variable containing outcome data
-    `Bool'  desc       // use descending sort order within ties
+    `Int'   desc       // -1 = descending; 1 = ascending
+    `Bool'  stabl      // use stable sort order within ties
     `RC'    y          // outcome data
     `RS'    N          // N of observations
     `RC'    w          // weights
+    `RC'    w0         // base weights (only if balancing)
     `RS'    W          // sum of weights
     `Int'   wtype      // (see below)
     `Bool'  bal        // has balancing
@@ -3267,7 +3249,8 @@ void rd_getdata(`Data' data)
     data.by       = (st_local("by")!="")
     data.tbreak   = (st_local("nobreak")=="")
     data.mid      = (st_local("nomid")=="")
-    data.D.desc   = data.R.desc = (st_local("descending")!="")
+    data.D.desc   = data.R.desc = (st_local("descending")!="" ? -1 : 1)
+    data.D.stabl  = data.R.stabl = (st_local("nostable")=="")
     data.pooled   = (st_local("pooled")!="")
     weight        = st_local("weight")
     data.wtype    = (weight=="fweight" ? 1 :
@@ -3355,11 +3338,15 @@ void _rd_getdata(`Data' data, `Grp' G)
     // get base weights
     if (G.wtype) {
         if (G.bal) {
-            G.w = data.bal.w
+            G.w  = data.bal.w
+            G.w0 = st_data(., st_local("wvar"), G.touse)
             // redefine bal.w; needed for IFs
-            data.bal.w = data.bal.w :/ st_data(., st_local("wvar"), G.touse)
+            data.bal.w = data.bal.w :/ G.w0
         }
-        else G.w = st_data(., st_local("wvar"), G.touse)
+        else {
+            G.w  = st_data(., st_local("wvar"), G.touse)
+            G.w0 = 1
+        }
         G.W = quadsum(G.w)
     }
     else {
@@ -3369,19 +3356,25 @@ void _rd_getdata(`Data' data, `Grp' G)
     }
     
     // order the data
-    if (rows(G.w)!=1) {
-        if (G.desc) G.p = order((G.y,G.w), (1,-2))
-        else        G.p = order((G.y,G.w), (1,2))
+    if (G.bal) {
+        // order by base weights, not the balancing weights
+        if (rows(G.w0)!=1) {
+            G.p  = mm_order((G.y,G.w0), (1,2*G.desc), G.stabl)
+            G.w0 = G.w0[G.p]
+        }
+        else G.p = mm_order(G.y, 1, G.stabl)
         G.w = G.w[G.p]
-        if (G.bal) {
-            data.bal.w = data.bal.w[G.p]
-            if (data.nose==0) {
-                data.bal.Z = data.bal.Z[G.p,]
-                data.bal.IFZ = data.bal.IFZ[G.p,]
-            }
+        data.bal.w = data.bal.w[G.p]
+        if (data.nose==0) {
+            data.bal.Z = data.bal.Z[G.p,]
+            data.bal.IFZ = data.bal.IFZ[G.p,]
         }
     }
-    else G.p = order(G.y, 1)
+    else if (rows(G.w)!=1) {
+        G.p = mm_order((G.y,G.w), (1,2*G.desc), G.stabl)
+        G.w = G.w[G.p]
+    }
+    else G.p = mm_order(G.y, 1, G.stabl)
     G.y = G.y[G.p]
     
     // redefine G.p so that it can be used to write data back to Stata

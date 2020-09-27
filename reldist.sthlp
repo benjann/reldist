@@ -1,5 +1,5 @@
 {smcl}
-{* 26sep2020}{...}
+{* 27sep2020}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -86,11 +86,7 @@ help for {hi:reldist}{...}
     {p_end}
 {synopt:{cmdab:adj:ust(}{help reldist##adjust:{it:spec}}{cmd:)}}location and scale adjustment (not allowed for {cmd:mrp})
     {p_end}
-{synopt:{opt nobr:eak}}do not break ties when computing relative ranks
-    {p_end}
-{synopt:{opt nomid}}do not use midpoints when computing relative ranks
-    {p_end}
-{synopt:{opt desc:ending}}sort tied observations in descending order of weights
+{synopt:{help reldist##rankopts:{it:rank_options}}}details about computation of relative ranks
     {p_end}
 {synopt:{opt r:eplace}}allow replacing existing variables
     {p_end}
@@ -507,30 +503,43 @@ help for {hi:reldist}{...}
     {opt log:arithmic} performs the adjustments on logarithmically transformed
     data. Error will be returned if the data is not strictly positive.
 
+{marker rankopts}{...}
 {phang}
-    {opt nobreak} changes how the relative ranks are computed in case of ties. By
-    default, {cmd:reldist} breaks ties randomly for comparison values that have
+    {it:rank_options} specify the details about the computation of relative
+    ranks. These options are irrelevant for {cmd:reldist histogram},
+    {cmd:reldist cdf}, {cmd:reldist divergence} unless option {cmd:pdf}
+    is specified, and {cmd:reldist pdf} if {cmd:discrete} or {cmd:categorical}
+    is specified. The options are as follows:
+
+{phang2}
+    {opt nobr:eak} changes how the relative ranks are computed in case of ties. By
+    default, {cmd:reldist} breaks ties for comparison values that have
     ties in the reference distribution (in ascending order of weights, if
     weights have been specified). This leads to improved results if there is
-    heaping in the data. Specify {cmd:nobreak} to omit breaking ties. Option
-    {cmd:nobreak} has no effect for {cmd:reldist histogram} and {cmd:reldist cdf}.
+    heaping in the data. Specify {cmd:nobreak} to omit breaking ties.
 
-{phang}
+{phang2}
     {opt nomid} changes how the relative ranks are computed in case of ties. By
     default, {cmd:reldist} uses midpoints of the steps in the cumulative
     distribution for comparison values that have ties in the
     reference distribution. This ensures that the average
     relative rank is equal to 0.5 if the comparison and reference distributions
     are identical. Specify {cmd:nomid} to assign relative ranks based on full
-    steps in the CDF. Option {cmd:nomid} has no effect
-    for {cmd:reldist histogram} and {cmd:reldist cdf}.
+    steps in the CDF.
 
-{phang}
-    {opt descending} sorts tied observations in descending order of
+{phang2}
+    {opt desc:ending} sorts tied observations in descending order of
     weights. The default is to use ascending sort order. Option
-    {opt descending} has no effect if {cmd:nobreak} is specified or
-    if there are no weights. Furthermore, it has no effect
-    for {cmd:reldist histogram} and {cmd:reldist cdf}.
+    {opt descending} has no effect on results if {cmd:nobreak} is specified or
+    if there are no weights.
+
+{phang2}
+    {opt nosta:ble} breaks ties randomly (within unique values of weights). The
+    default is to break the ties in the sort order of the data (within unique
+    values of weights). Option {opt nostable} has no effect on the results
+    reported by {cmd:reldist}. It may, however, affect the ranks stored by
+    option {cmd:generate()} or the influence functions stored by {cmd:predict}
+    (unless option {opt nobreak} is specified).
 
 {phang}
     {opt replace} allows replacing existing variables. This is relevant for
@@ -1515,6 +1524,7 @@ help for {hi:reldist}{...}
 {synopt:{cmd:e(nobreak)}}{cmd:nobreak} or empty{p_end}
 {synopt:{cmd:e(nomid)}}{cmd:nomid} or empty{p_end}
 {synopt:{cmd:e(descending)}}{cmd:descending} or empty{p_end}
+{synopt:{cmd:e(nostable)}}{cmd:nostable} or empty{p_end}
 {synopt:{cmd:e(atopt)}}contents of {cmd:at()} option{p_end}
 {synopt:{cmd:e(atx)}}{cmd:atx}, {cmd:comparison}, {cmd:reference} or empty{p_end}
 {synopt:{cmd:e(atxopt)}}contents of {cmd:atx()} option{p_end}
@@ -1538,12 +1548,12 @@ help for {hi:reldist}{...}
 {synopt:{cmd:e(balmethod)}}balancing method{p_end}
 {synopt:{cmd:e(balref)}}{cmd:reference} or empty{p_end}
 {synopt:{cmd:e(balcontrast)}}{cmd:contrast} or empty{p_end}
-{synopt:{cmd:e(balopts)}}options passed through to {cmd:kmatch}{p_end}
+{synopt:{cmd:e(balopts)}}options passed through to balancing procedure{p_end}
 {synopt:{cmd:e(compare)}}{cmd:compare} or empty{p_end}
 {synopt:{cmd:e(c_balance)}}list of alternate balancing variables ({cmd:divergence} only){p_end}
 {synopt:{cmd:e(c_balmethod)}}alternate balancing method ({cmd:divergence} only){p_end}
 {synopt:{cmd:e(c_balref)}}{cmd:reference} or empty ({cmd:divergence} only){p_end}
-{synopt:{cmd:e(c_balopts)}}alternate options passed through to {cmd:kmatch} ({cmd:divergence} only){p_end}
+{synopt:{cmd:e(c_balopts)}}alternate options passed through to balancing procedure ({cmd:divergence} only){p_end}
 {synopt:{cmd:e(over)}}name of {it:overvar}{p_end}
 {synopt:{cmd:e(over_namelist)}}values of over variable{p_end}
 {synopt:{cmd:e(over_labels)}}values of over variable{p_end}
@@ -1621,5 +1631,5 @@ help for {hi:reldist}{...}
 {title:Also see}
 
 {psee}
-    Online: help for {helpb cumul}, {helpb kmatch}, {helpb moremata}
+    Online: help for {helpb cumul}, {helpb moremata}
 
