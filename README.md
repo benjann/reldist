@@ -36,6 +36,11 @@ Installation from GitHub:
 
 Main changes:
 
+    27sep2020 (version 1.2.3)
+    - now beaking ties in order of base weights if balance() is specified, not the 
+      balancing weights
+    - now using stable sort order unless -nosort- is specified
+    
     26sep2020 (version 1.2.1)
     - balance() reimplemented; balancing weights are no longer assumed fixed when
       computing standard errors

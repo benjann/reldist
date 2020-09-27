@@ -1,4 +1,4 @@
-*! version 1.2.2  27sep2020  Ben Jann
+*! version 1.2.3  27sep2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -3343,15 +3343,15 @@ void _rd_getdata(`Data' data, `Grp' G)
             // redefine bal.w; needed for IFs
             data.bal.w = data.bal.w :/ G.w0
         }
-        else {
-            G.w  = st_data(., st_local("wvar"), G.touse)
-            G.w0 = 1
-        }
+        else G.w  = st_data(., st_local("wvar"), G.touse)
         G.W = quadsum(G.w)
     }
     else {
-        if (G.bal) G.w = data.bal.w
-        else       G.w = 1
+        if (G.bal) {
+            G.w  = data.bal.w
+            G.w0 = 1
+        }
+        else G.w = 1
         G.W = G.N
     }
     
@@ -3376,7 +3376,6 @@ void _rd_getdata(`Data' data, `Grp' G)
     }
     else G.p = mm_order(G.y, 1, G.stabl)
     G.y = G.y[G.p]
-    
     // redefine G.p so that it can be used to write data back to Stata
     G.p = invorder(G.p)
 }
@@ -3391,7 +3390,7 @@ void rd_balance(`Data' data, `Bal' bal)
     // set flag for distribution that will contain balancing
     if   (data.bal.ref==data.bal.contrast) data.D.bal = 1
     else                                   data.R.bal = 1
-
+    
     // determine treatment group and control group
     if (data.bal.ref) {
         bal.T = st_local("touse1") // treatment group
@@ -3451,7 +3450,7 @@ void rd_balance_ipw(`Data' data, `Bal' bal)
     
     // update weights if -pooled- and normalize
     rd_balance_rescale(data, bal, w0)
-
+    
     // cleanup
     st_dropvar(ps)
 }
@@ -3561,7 +3560,6 @@ void rd_balance_rescale(`Data' data, `Bal' bal, `RC' w0)
         // rescale to size of control group
         bal.w = bal.w * (rows(bal.w)/quadsum(bal.w))
     }
-    sum(bal.w)
 }
 
 void _rd_getadj(`Gadj' adj, `SS' lnm)
