@@ -1,4 +1,4 @@
-*! version 1.2.3  27sep2020  Ben Jann
+*! version 1.2.4  27sep2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -3192,7 +3192,6 @@ struct `GRP' {
     `RC'    y          // outcome data
     `RS'    N          // N of observations
     `RC'    w          // weights
-    `RC'    w0         // base weights (only if balancing)
     `RS'    W          // sum of weights
     `Int'   wtype      // (see below)
     `Bool'  bal        // has balancing
@@ -3220,7 +3219,9 @@ struct `BAL' {
     `SS'    C          // Stata variable marking control group
     `RM'    Z          // control group: balancing variables (view)
     `RM'    IFZ        // control group: IFs of balancing model
-    `RC'    w          // control group: balancing weights (net of base weights)
+    `RC'    w0         // control group: base weight
+    `RC'    w          // control group: total weight (including everything)
+    `RC'    wb         // control group: total weight - "pooled" component
 }
 
 struct `DATA' {
@@ -3338,36 +3339,35 @@ void _rd_getdata(`Data' data, `Grp' G)
     // get base weights
     if (G.wtype) {
         if (G.bal) {
-            G.w  = data.bal.w
-            G.w0 = st_data(., st_local("wvar"), G.touse)
-            // redefine bal.w; needed for IFs
-            data.bal.w = data.bal.w :/ G.w0
+            G.w = data.bal.w
+            if (data.nose==0) {
+                // compute net balancing weights; needed for IFs
+                data.bal.w = data.bal.w :/ data.bal.w0
+            }
         }
-        else G.w  = st_data(., st_local("wvar"), G.touse)
+        else G.w = st_data(., st_local("wvar"), G.touse)
         G.W = quadsum(G.w)
     }
     else {
-        if (G.bal) {
-            G.w  = data.bal.w
-            G.w0 = 1
-        }
-        else G.w = 1
+        if (G.bal) G.w = data.bal.w
+        else       G.w = 1
         G.W = G.N
     }
     
     // order the data
     if (G.bal) {
         // order by base weights, not the balancing weights
-        if (rows(G.w0)!=1) {
-            G.p  = mm_order((G.y,G.w0), (1,2*G.desc), G.stabl)
-            G.w0 = G.w0[G.p]
+        if (rows(data.bal.w0)!=1) {
+            G.p  = mm_order((G.y,data.bal.w0), (1,2*G.desc), G.stabl)
+            data.bal.w0 = data.bal.w0[G.p] // not really needed
         }
         else G.p = mm_order(G.y, 1, G.stabl)
         G.w = G.w[G.p]
-        data.bal.w = data.bal.w[G.p]
         if (data.nose==0) {
-            data.bal.Z = data.bal.Z[G.p,]
-            data.bal.IFZ = data.bal.IFZ[G.p,]
+            data.bal.w    = data.bal.w[G.p]
+            data.bal.wb   = data.bal.wb[G.p]
+            data.bal.Z    = data.bal.Z[G.p,]
+            data.bal.IFZ  = data.bal.IFZ[G.p,]
         }
     }
     else if (rows(G.w)!=1) {
@@ -3384,8 +3384,11 @@ void rd_balance(`Data' data, `Bal' bal)
 {
     // has balancing?
     data.D.bal = data.R.bal = 0
-    bal.zvars = st_local("bal_varlist")
-    if (bal.zvars=="") return
+    if (st_local("bal_varlist")=="") return
+    
+    // expand bal_varlist (so that it will be stable)
+    stata("fvexpand \`bal_varlist' if \`touse'")
+    bal.zvars = st_global("r(varlist)")
     
     // set flag for distribution that will contain balancing
     if   (data.bal.ref==data.bal.contrast) data.D.bal = 1
@@ -3413,11 +3416,10 @@ void rd_balance(`Data' data, `Bal' bal)
 void rd_balance_ipw(`Data' data, `Bal' bal)
 {
     `SR' ps
-    `RC' w0
     
     // run logit and obtain ps
-    stata("quietly \`bal_noisily' logit " + bal.T + 
-        " \`bal_varlist' if \`touse' \`wgt', \`bal_opts'")
+    stata("quietly \`bal_noisily' logit " + bal.T + " " + bal.zvars +
+        " if \`touse' \`wgt', \`bal_opts'")
     ps = st_tempname()
     stata("quietly predict double " + ps + " if e(sample), pr")
     
@@ -3426,14 +3428,15 @@ void rd_balance_ipw(`Data' data, `Bal' bal)
     bal.w = bal.w :/ (1 :- bal.w)
     if (data.wtype) {
         // factor in base weights and rescale to size of treatment group
-        w0 = st_data(., st_local("wvar"), bal.C)
-        bal.w = bal.w :* w0
-        bal.w = bal.w * (quadsum(st_data(., st_local("wvar"), bal.T)) / quadsum(bal.w))
+        bal.w0 = st_data(., st_local("wvar"), bal.C)
+        bal.w  = bal.w :* bal.w0
+        bal.w  = bal.w * (quadsum(st_data(., st_local("wvar"), bal.T)) / quadsum(bal.w))
     }
     else {
         // rescale to size of treatment group (sum of logit-IPW weights
         // only approximates the size of the treatment group)
-        bal.w = bal.w * (rows(st_data(., bal.T, bal.T)) / quadsum(bal.w))
+        bal.w0 = 1
+        bal.w  = bal.w * (rows(st_data(., bal.T, bal.T)) / quadsum(bal.w))
     }
     if (hasmissing(bal.w)) {
         printf("{err}warning: some observations lost during computation of balancing weights\n")
@@ -3449,7 +3452,7 @@ void rd_balance_ipw(`Data' data, `Bal' bal)
         st_data(., ps, st_local("touse")))
     
     // update weights if -pooled- and normalize
-    rd_balance_rescale(data, bal, w0)
+    rd_balance_rescale(data, bal)
     
     // cleanup
     st_dropvar(ps)
@@ -3470,7 +3473,7 @@ void rd_balance_ipw_IF(`Data' data, `Bal' bal, `RC' Y, `RC' p)
     else      h = Z :* h
     w = p :* (1 :- p)
     if (data.wtype) w = w :* st_data(., st_local("wvar"), st_local("touse"))
-    IFZ = h * invsym(cross(Z, cons, w, Z, cons))'
+    IFZ = h * invsym(quadcross(Z, cons, w, Z, cons))'
     
     // store results in data.bal
     bal.T_IFZ = select(IFZ, Y:==1)
@@ -3483,7 +3486,7 @@ void rd_balance_ipw_IF(`Data' data, `Bal' bal, `RC' Y, `RC' p)
 void rd_balance_eb(`Data' data, `Bal' bal)
 {
     `RM' X1, X0
-    `RC' w1, w0
+    `RC' w1
     `SR' opts
     transmorphic S
     pragma unset X1
@@ -3493,11 +3496,11 @@ void rd_balance_eb(`Data' data, `Bal' bal)
     st_view(X1, ., bal.zvars, bal.T)
     st_view(X0, ., bal.zvars, bal.C)
     if (data.wtype) {
-        w1 = st_data(., st_local("wvar"), bal.T)
-        w0 = st_data(., st_local("wvar"), bal.C)
+        w1     = st_data(., st_local("wvar"), bal.T)
+        bal.w0 = st_data(., st_local("wvar"), bal.C)
     }
-    else w0 = w1 = 1
-    S = mm_ebal_init(X1, w1, X0, w0)
+    else bal.w0 = w1 = 1
+    S = mm_ebal_init(X1, w1, X0, bal.w0)
 
     // settings
     opts = tokens(st_local("bal_ebopts"))
@@ -3522,44 +3525,60 @@ void rd_balance_eb(`Data' data, `Bal' bal)
     }
 
     // fillin IFs
-    if (data.nose==0) rd_balance_eb_IF(data, bal, X1, w1, X0, w0)
+    if (data.nose==0) rd_balance_eb_IF(data, bal, X1, w1, X0)
 
     // update weights if -pooled- and normalize
-    rd_balance_rescale(data, bal, w0)
+    rd_balance_rescale(data, bal)
 }
 
-void rd_balance_eb_IF(`Data' data, `Bal' bal, `RM' X1, `RC' w1, `RM' X0, `RC' w0)
+void rd_balance_eb_IF(`Data' data, `Bal' bal, `RM' X1, `RC' w1, `RM' X0)
 {
+    `RS' W, odds
     `RR' M 
     `RC' h
     `RM' G
     
+    // beta
     M    = mean(X1, w1) // target moments
     h    = X0 :- M
-    G    = invsym(cross(h, bal.w, X0))
+    G    = invsym(quadcross(h, bal.w, X0))
     bal.T_IFZ = ((X1 :- M) * G') 
-        // => no need to add (\tilde W_!T / W_T) because it is equal to one
-        //    given the scaling of the weights returned by mm_ebal()
-    bal.IFZ   = - (bal.w:/w0) :* h * G'
+    bal.IFZ   = -(bal.w:/bal.w0) :* h * G'
     bal.T_N   = rows(bal.T_IFZ)
     bal.Z     = X0 // (no longer a view)
+    
+    // alpha
+    odds = (rows(w1)==1 ? w1*rows(X1) : quadsum(w1)) /
+           (rows(bal.w0)==1 ? bal.w0*rows(X0) : quadsum(bal.w0))
+    h    = bal.w:/bal.w0 :- odds
+    G    = quadcolsum(X0 :* bal.w)
+    W    = quadsum(bal.w)
+    bal.T_IFZ = bal.T_IFZ,  (1 :- bal.T_IFZ * G')/W
+    bal.IFZ   = bal.IFZ,   -(h :+ odds :+ bal.IFZ * G')/W
+    bal.Z     = bal.Z,      J(rows(bal.Z), 1, 1)
 }
 
-void rd_balance_rescale(`Data' data, `Bal' bal, `RC' w0)
+void rd_balance_rescale(`Data' data, `Bal' bal)
 {
+    `RS' c
+
     // at this point sum(bal.w) is equal to the size of the treatment group
+    if (data.nose==0) bal.wb = bal.w
     if (data.wtype) {
         // add base weight if pooled
-        if (data.pooled) bal.w = w0 :+ bal.w
+        if (data.pooled) bal.w = bal.w0 :+ bal.w
         // rescale to size of control group
-        bal.w = bal.w * (quadsum(w0)/quadsum(bal.w))
+        c = quadsum(bal.w0) / quadsum(bal.w)
+        bal.w = bal.w * c
     }
     else {
         // add one if pooled
         if (data.pooled) bal.w = 1 :+ bal.w
         // rescale to size of control group
-        bal.w = bal.w * (rows(bal.w)/quadsum(bal.w))
+        c = rows(bal.w) / quadsum(bal.w)
+        bal.w = bal.w * c
     }
+    if (data.nose==0) bal.wb = bal.wb * c
 }
 
 void _rd_getadj(`Gadj' adj, `SS' lnm)
@@ -3900,7 +3919,7 @@ void _rd_IF_bal(`Bal' bal, `Int' j, `Grp' G, `RC' h)
 {   // append contribution to IFs due to balancing
     `RR' delta
     
-    if (G.bal) delta = colsum(G.w :* h :* bal.Z)'
+    if (G.bal) delta = quadcolsum(bal.wb :* h :* bal.Z)'
     // location
     if (j==.l) {
         if (G.bal) {

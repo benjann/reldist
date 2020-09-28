@@ -36,6 +36,11 @@ Installation from GitHub:
 
 Main changes:
 
+    28sep2020 (version 1.2.4)
+    - SEs were not correct if balance() was combined with -pooled-; this is fixed
+    - etropy balancing crashed if factor variable notation expanded into different
+      vectors in the two subsample; this is fixed
+    
     27sep2020 (version 1.2.3)
     - now beaking ties in order of base weights if balance() is specified, not the 
       balancing weights
