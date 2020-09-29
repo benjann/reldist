@@ -36,6 +36,13 @@ Installation from GitHub:
 
 Main changes:
 
+    29sep2020 (version 1.2.5)
+    - reldist divergence:
+      o if compare() was specified, influence functions were not always processed
+        correctly (such that result were wrong or an error occurred); this is fixed
+      o option -compare()- did not work with replication vce(); this is fixed
+      o option -compare- without argument did not work; this is fixed
+    
     28sep2020 (version 1.2.4)
     - SEs were not correct if balance() was combined with -pooled-; this is fixed
     - etropy balancing crashed if factor variable notation expanded into different

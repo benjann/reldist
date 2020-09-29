@@ -1,4 +1,4 @@
-*! version 1.2.4  27sep2020  Ben Jann
+*! version 1.2.5  29sep2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -88,7 +88,9 @@ end
 program Get_diopts
     gettoken SUBCMD 0 : 0
     _parse comma lhs 0 : 0
-    syntax [, Level(passthru) CITRANSform noHEADer NOTABle TABle GRaph GRaph2(passthru) * ]
+    syntax [, Level(passthru) CITRANSform noHEADer NOTABle TABle ///
+        COMpare /// hide from _get_diopts
+        GRaph GRaph2(passthru) * ]
     if inlist("`SUBCMD'","MRP","SUM","DIV") {
         if `"`graph'`graph2'"'!="" {
             di as err "option {bf:graph()} not allowed"
@@ -96,7 +98,7 @@ program Get_diopts
         }
     }
     _get_diopts diopts options, `options'
-    local options `level' `options'
+    local options `level' `compare' `options'
     if `"`options'"'!="" local lhs `lhs', `options'
     c_local diopts `diopts' `level' `citransform' `header' `notable' `table' `graph' `graph2'
     c_local dioptshaslevel = `"`level'"'!=""
@@ -123,9 +125,14 @@ program Check_vce
     local 0 `", `options'"'
     syntax [, Generate(passthru) BWidth(passthru) BWADJust(passthru) ///
         n(passthru) at(passthru) atx ATX2(passthru) DISCRete CATegorical ///
-        BALance(passthru) COMpare COMpare2(str) * ]
+        BALance(passthru) COMpare COMpare2(passthru) * ]
+    if "`compare'"!="" {
+        // so that _vce_parserun will not absorb the option
+        if `"`compare2'"'=="" local compare2 compare(adjust())
+        local compare
+    }
     local options `n' `at' `atx' `atx2' `discrete' `categorical'/*
-        */ `balance' `compare' `compar2' `options'
+        */ `balance' `compare2' `options'
     if `"`generate'"'!="" {
         local vcetype `vcetype' `svytype'
         di as err `"option {bf:generate()} not allowed with {bf:vce(`vcetype')}"'
@@ -3525,13 +3532,13 @@ void rd_balance_eb(`Data' data, `Bal' bal)
     }
 
     // fillin IFs
-    if (data.nose==0) rd_balance_eb_IF(data, bal, X1, w1, X0)
+    if (data.nose==0) rd_balance_eb_IF(bal, X1, w1, X0)
 
     // update weights if -pooled- and normalize
     rd_balance_rescale(data, bal)
 }
 
-void rd_balance_eb_IF(`Data' data, `Bal' bal, `RM' X1, `RC' w1, `RM' X0)
+void rd_balance_eb_IF(`Bal' bal, `RM' X1, `RC' w1, `RM' X0)
 {
     `RS' W, odds
     `RR' M 
@@ -3946,16 +3953,25 @@ void _rd_IF_bal(`Bal' bal, `Int' j, `Grp' G, `RC' h)
     }
 }
 
-void _rd_IF_store(`Data' data, `Int' n, | `Bool' append0)
+void _rd_IF_store(`Data' data, `Int' n, | `Bool' append)
 {
-    `Bool' append
-    `SR'   vnm
     `IntR' idx
+
+    idx = _rd_IF_store_idx(n, (args()<3 ? `FALSE' : append))
+    st_store(., idx, data.D.touse, st_data(., idx, data.D.touse) + data.D.IF[data.D.p,])
+    st_store(., idx, data.R.touse, st_data(., idx, data.R.touse) + data.R.IF[data.R.p,])
+    if (data.D.bal | data.R.bal) {
+        st_store(., idx, data.bal.T, st_data(., idx, data.bal.T) + data.bal.T_IF)
+    }
+}
+
+`IntR' _rd_IF_store_idx(`Int' n, `Bool' append)
+{
+    `IntR' idx
+    `SR'   vnm
     `Int'  i
-    
-    if (args()<3) append0 = `FALSE'
-    append = (st_local("IFs")=="" | append0!=`FALSE')
-    if (append) {
+
+    if (append | st_local("IFs")=="") {
         vnm = st_tempname(n)
         idx = st_addvar("double", vnm)
         for (i=1;i<=n;i++) stata(sprintf("qui replace %s = 0 if %s", // fillin zeros
@@ -3964,11 +3980,7 @@ void _rd_IF_store(`Data' data, `Int' n, | `Bool' append0)
         st_local("IFs", invtokens(vnm))
     }
     else idx = st_varindex(tokens(st_local("IFs")))
-    st_store(., idx, data.D.touse, st_data(., idx, data.D.touse) + data.D.IF[data.D.p,])
-    st_store(., idx, data.R.touse, st_data(., idx, data.R.touse) + data.R.IF[data.R.p,])
-    if (data.D.bal | data.R.bal) {
-        st_store(., idx, data.bal.T, st_data(., idx, data.bal.T) + data.bal.T_IF)
-    }
+    return(idx)
 }
 
 `RC' _rd_IF_x_to_y(`RC' y, `Grp' D, `Grp' R, `Int' link)
@@ -4874,74 +4886,80 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
     `Int'  k
     `RS'   h, h0
     `RC'   b, b0, p
-    `RM'   IFD, IFR, IFT
+    `RM'   IF, IF0
     `SR'   stats
     `SM'   cstripe
     `Data' data
     pragma unset data
     pragma unset h
     pragma unset h0
+    pragma unset IF
+    pragma unset IF0
     
-    // main estimate
+    // stats
     stats = tokens(st_local("stats"))
     k = length(stats)
-    b = _rd_DIV(data, stats, h)
     cstripe = stats'
-    // compare
-    if (st_local("compare")!="") {
-        if (data.nose==0) {
-            IFD = data.D.IF
-            IFR = data.R.IF
-            if (data.D.bal | data.R.bal) IFT = data.bal.T_IF
-        }
-        _rd_DIV_lswap(0)
-        b0 = _rd_DIV(data, stats, h0)
-        _rd_DIV_lswap(1)
-        b = b \ b0 \ b-b0
-        if (st_local("over")!="") {
-            if (k==1) cstripe = (J(3,1,st_local("o")), ("main" \ "alternate" \ "difference"))
-            else      cstripe = (st_local("o"):+"_":+cstripe, J(k,1,"main")) \ 
-                                (st_local("o"):+"_":+cstripe, J(k,1,"alternate")) \ 
-                                (st_local("o"):+"_":+cstripe, J(k,1,"difference"))
-        }
-        else {
-            if (k==1) cstripe = (J(3,1,""), ("main" \ "alternate" \ "difference"))
-            else      cstripe = (cstripe, J(k,1,"main")) \ 
-                                (cstripe, J(k,1,"alternate")) \ 
-                                (cstripe, J(k,1,"difference"))
-        }
-        p = mm_seq(1, k*3, k) // reorder results
-        if (k==2) p = p \ 1:+p
-        if (k==3) p = p \ 1:+p \ 2:+p
-        b = b[p]
-        cstripe = cstripe[p,]
-        if (data.nose==0) {
-            data.D.IF = IFD, data.D.IF, IFD-data.D.IF
-            data.R.IF = IFR, data.R.IF, IFR-data.R.IF
-            data.D.IF = data.D.IF[,p]
-            data.R.IF = data.R.IF[,p]
-            if (data.D.bal | data.R.bal) {
-                data.bal.T_IF = IFT, data.bal.T_IF, IFT-data.bal.T_IF
-                data.bal.T_IF = data.bal.T_IF[,p]
-            }
-        }
-        if (st_local("pdf")!="") st_matrix(BWnm, (h, h0)) 
-    }
-    else {
+    // estimate main model
+    b = _rd_DIV(data, stats, h)
+    if (st_local("compare")=="") {
+        // return results if no alternate model
         if (st_local("over")!="") {
             if (k==1) cstripe = ("", st_local("o")+"."+st_local("over"))
             else      cstripe = (J(length(b),1,st_local("o")), cstripe)
         }
         else cstripe = J(length(b),1,""), cstripe
         if (st_local("pdf")!="") st_matrix(BWnm, h) 
+        st_matrix(bnm, b')
+        st_matrixcolstripe(bnm, cstripe)
+        if (data.nose==0) _rd_IF_store(data, length(b))
+        return
     }
-
+    // get IFs from main model
+    if (data.nose==0) _rd_DIV_IF(data, length(b), IF)
+    // estimate alternate model
+    _rd_DIV_lswap(0)
+    b0 = _rd_DIV(data=`DATA'(), stats, h0)
+    if (data.nose==0) _rd_DIV_IF(data, length(b0), IF0)
+    _rd_DIV_lswap(1)
     // return results
-    st_matrix(bnm, b')
-    st_matrixcolstripe(bnm, cstripe)
-    if (data.nose==0) {
-        _rd_IF_store(data, length(b))
+    if (st_local("pdf")!="") st_matrix(BWnm, (h, h0)) 
+    b = b \ b0 \ b-b0
+    if (st_local("over")!="") {
+        if (k==1) cstripe = (J(3,1,st_local("o")), ("main" \ "alternate" \ "difference"))
+        else      cstripe = (st_local("o"):+"_":+cstripe, J(k,1,"main")) \ 
+                            (st_local("o"):+"_":+cstripe, J(k,1,"alternate")) \ 
+                            (st_local("o"):+"_":+cstripe, J(k,1,"difference"))
     }
+    else {
+        if (k==1) cstripe = (J(3,1,""), ("main" \ "alternate" \ "difference"))
+        else      cstripe = (cstripe, J(k,1,"main")) \ 
+                            (cstripe, J(k,1,"alternate")) \ 
+                            (cstripe, J(k,1,"difference"))
+    }
+    p = mm_seq(1, k*3, k) // reorder results
+    if (k==2) p = p \ 1:+p
+    if (k==3) p = p \ 1:+p \ 2:+p
+    st_matrix(bnm, b[p]')
+    st_matrixcolstripe(bnm, cstripe[p,])
+    if (data.nose==0) {
+        IF = IF, IF0, IF-IF0
+        st_store(., _rd_IF_store_idx(length(b), 0), st_local("touse"), IF[,p])
+    }
+}
+
+`RM' _rd_DIV_IF(`Data' data, `Int' n, `RM' IF)
+{   // generates the IFs of the model and reads them back in
+    `SS'    tmp
+    `IntR'  idx
+    
+    tmp = st_local("IFs")
+    st_local("IFs", "")
+    _rd_IF_store(data, n)
+    idx = st_varindex(tokens(st_local("IFs")))
+    IF = st_data(., idx, st_local("touse"))
+    st_dropvar(idx)
+    st_local("IFs", tmp)
 }
 
 `RC' _rd_DIV(`Data' data, `SR' stats, `RS' h)
