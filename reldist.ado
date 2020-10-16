@@ -1,4 +1,4 @@
-*! version 1.2.5  29sep2020  Ben Jann
+*! version 1.2.6  05oct2020  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -28,8 +28,8 @@ program reldist, eclass properties(svyb svyj)
     local version : di "version " string(_caller()) ":"
     Parse_subcmd `subcmd'
     Get_diopts `SUBCMD' `00' // returns 00, diopts, dioptshaslevel
-    tempname DIVBW
-    Check_vce `DIVBW' `SUBCMD' `00'
+    tempname BW
+    Check_vce `BW' `SUBCMD' `00'
     if "`vcetype'"=="svyr" {
         if `"`svylevel'"'!="" {
             if `dioptshaslevel'==0 {
@@ -106,7 +106,7 @@ program Get_diopts
 end
 
 program Check_vce
-    gettoken DIVBW  0 : 0
+    gettoken BW  0 : 0
     gettoken SUBCMD 0 : 0
     _parse comma lhs 0 : 0
     syntax [, vce(str) NOSE * ]
@@ -172,7 +172,7 @@ program Check_vce
     }
     // obtain bandwidth
     if "`discrete'`categorical'"=="" {
-        Obtain_bwidth `DIVBW' `SUBCMD' `lhs', `bwidth' `bwadjust' nose `options' ///
+        Obtain_bwidth `BW' `SUBCMD' `lhs', `bwidth' `bwadjust' nose `options' ///
             _vcevars(`vcevars') _vcetype(`vcetype') _svysubpop(`svysubpop')
     }
     // svy
@@ -264,12 +264,12 @@ program Parse_vceopt_jack
 end
 
 program Obtain_bwidth   // returns bwidth, bwadjust
-    gettoken DIVBW  0 : 0
+    gettoken BW     0 : 0
     gettoken SUBCMD 0 : 0
     if !inlist("`SUBCMD'","PDF","DIV") exit
     syntax [anything] [if] [in] [fw iw pw] [, ///
         _vcevars(str) _vcetype(str) _svysubpop(str) ///
-        bwidth(str) DISCRete CATegorical * ]
+        bwidth(str) * ]
     if "`SUBCMD'"=="DIV" {
         Obtain_bwidth_DIV_pdf, `options' // returns pdf
         if "`pdf'"=="" exit
@@ -280,7 +280,8 @@ program Obtain_bwidth   // returns bwidth, bwadjust
     if _rc==0 exit
     capt confirm matrix `bwidth'
     if _rc==0 exit
-    di as txt "(running {bf:reldist} to obtain bandwith)"
+    local options bwidth(`bwidth') `options'
+    di as txt "(running {bf:reldist} to obtain bandwidth)"
     marksample touse
     if `"`_vcetype'"'=="svy" {
         if `"`weight'"'!="" {
@@ -298,11 +299,12 @@ program Obtain_bwidth   // returns bwidth, bwadjust
     }
     qui `SUBCMD' `anything' if `touse' `wgt', `options'
     if "`SUBCMD'"=="DIV" {
-        matrix `DIVBW' = e(bwidth)  // e(bwidth) is a matrix
-        c_local bwidth bwidth(`DIVBW')
+        matrix `BW' = e(bwidth)
+        c_local bwidth bwidth(`BW')
     }
     else {
-        c_local bwidth bwidth(`e(bwidth)')
+        scalar `BW' = e(bwidth)
+        c_local bwidth bwidth(`BW')
     }
     c_local bwadjust
 end
@@ -3193,11 +3195,11 @@ struct `GADJ' {
 
 struct `GRP' {
     `Int'   touse      // Stata variable marking sample
-    `RC'    yvar       // Stata variable containing outcome data
+    `Int'   yvar       // Stata variable containing outcome data
     `Int'   desc       // -1 = descending; 1 = ascending
     `Bool'  stabl      // use stable sort order within ties
     `RC'    y          // outcome data
-    `RS'    N          // N of observations
+    `Int'   N          // N of observations
     `RC'    w          // weights
     `RS'    W          // sum of weights
     `Int'   wtype      // (see below)
@@ -3218,7 +3220,7 @@ struct `BAL' {
     `Bool'  contrast   // compute RD of balanced vs. unbalanced
     `SS'    zvars      // names of balancing variables
     `SS'    T          // Stata variable marking treatment group
-    `RS'    T_N        // treatment group: N of observations
+    `Int'   T_N        // treatment group: N of observations
     `RM'    T_IF       // treatment group: influence functions 
     `RC'    T_IFl      // treatment group: location measure IF
     `RC'    T_IFs      // treatment group: scale measure IF
@@ -4310,13 +4312,13 @@ void _rd_PDFc_IF(`RC' b, `RC' at, `Int' n, `PDF' S, `Data' data)
 void _rd_PDFc_IF2(`Data' data, `Int' j, `RM' cdf, `RC' fR, `RC' delta)
 {
     _rd_IF_bal(data.bal, j, *data.G0, 
-        (_rd_PDFc_IF2_lamnda(*data.Y0, cdf, *data.Y1, data.ranks, delta) 
+        (_rd_PDFc_IF2_lambda(*data.Y0, cdf, *data.Y1, data.ranks, delta) 
          :- sum(delta :* data.ranks)) / data.G0->W)
     if (!data.adj.true) return
     _rd_PDFc_IF2_adj(data, data.D, data.R, j, delta :* fR)
 }
 
-`RC' _rd_PDFc_IF2_lamnda(`RC' y, `RM' cdf, `RC' x, `RC' r, `RC' d)
+`RC' _rd_PDFc_IF2_lambda(`RC' y, `RM' cdf, `RC' x, `RC' r, `RC' d)
 {
     `Int' i, j, j1, k
     `RS'  yi

@@ -36,6 +36,11 @@ Installation from GitHub:
 
 Main changes:
 
+    05oct2020 (version 1.2.6)
+    - when applying replication-based variance estimation, e.g. vce(bootstrap), 
+      reldist pdf used the SJPI bandwidth selector even if a different bandwidth 
+      selector was specified in bwidth(method); this if fixed
+    
     29sep2020 (version 1.2.5)
     - reldist divergence:
       o if compare() was specified, influence functions were not always processed
