@@ -1,4 +1,4 @@
-*! version 1.2.6  05oct2020  Ben Jann
+*! version 1.2.7  18jun2021  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -2982,7 +2982,7 @@ void rd_Post_common_e()
         stata("ereturn scalar N1 = " + st_local("N1"))
         stata("ereturn scalar N0 = " + st_local("N0"))
         st_global("e(swap)", st_local("swap"))
-        st_global("e(pooled)",     st_local("pooled"))
+        st_global("e(pooled)", st_local("pooled"))
     }
     else {
         st_global("e(refvar)", st_local("refvar"))
@@ -3221,9 +3221,6 @@ struct `BAL' {
     `SS'    zvars      // names of balancing variables
     `SS'    T          // Stata variable marking treatment group
     `Int'   T_N        // treatment group: N of observations
-    `RM'    T_IF       // treatment group: influence functions 
-    `RC'    T_IFl      // treatment group: location measure IF
-    `RC'    T_IFs      // treatment group: scale measure IF
     `RM'    T_IFZ      // treatment group: balancing model IFs
     `SS'    C          // Stata variable marking control group
     `RM'    Z          // control group: balancing variables (view)
@@ -3610,8 +3607,8 @@ void _rd_adjust(`Data' data)
     _rd_adjust_check(data.D.adj, get)
     _rd_adjust_check(data.R.adj, get)
     if (get) {
-        _rd_adjust_prep(data, data.D, data.adj, get)
-        _rd_adjust_prep(data, data.R, data.adj, get)
+        _rd_adjust_prep(data.D, data.adj, get)
+        _rd_adjust_prep(data.R, data.adj, get)
         if (data.adj.link==2) {
             if ((data.R.l/data.D.l)<=0 | (data.R.l/data.D.l)>=.) {
                 display("{err}invalid location adjustment factor; data not suitable for multiplicative adjustment")
@@ -3638,37 +3635,37 @@ void _rd_adjust_check(`Gadj' adj, `Int' get)
     }
 }
 
-void _rd_adjust_prep(`Data' data, `Grp' G, `Adj' adj, `Int' get)
+void _rd_adjust_prep(`Grp' G, `Adj' adj, `Int' get)
 {
     if (adj.link==1) {
         G.lny = ln(G.y)
-        if (adj.mean)   G.l = _rd_adjust_mean(data, G, G.lny)
-        else            G.l = _rd_adjust_median(data, G, G.lny)
+        if (adj.mean)   G.l = _rd_adjust_mean(G, G.lny)
+        else            G.l = _rd_adjust_median(G, G.lny)
         if (get>1) {
-            if (adj.sd) G.s = _rd_adjust_sd(data, G, G.lny)
-            else        G.s = _rd_adjust_iqrange(data, G, G.lny)
+            if (adj.sd) G.s = _rd_adjust_sd(G, G.lny)
+            else        G.s = _rd_adjust_iqrange(G, G.lny)
         }
         return
     }
-    if (adj.mean)       G.l = _rd_adjust_mean(data, G, G.y)
-    else                G.l = _rd_adjust_median(data, G, G.y)
+    if (adj.mean)       G.l = _rd_adjust_mean(G, G.y)
+    else                G.l = _rd_adjust_median(G, G.y)
     if (get>1) {
-        if (adj.sd)     G.s = _rd_adjust_sd(data, G, G.y)
-        else            G.s = _rd_adjust_iqrange(data, G, G.y)
+        if (adj.sd)     G.s = _rd_adjust_sd(G, G.y)
+        else            G.s = _rd_adjust_iqrange(G, G.y)
     }
 }
 
-`RS' _rd_adjust_mean(`Data' data, `Grp' G, `RC' y)
+`RS' _rd_adjust_mean(`Grp' G, `RC' y)
 {
     `RS' l
     
     l = mean(y, G.w)
     if (G.nose) return(l)
-    _rd_IF_bal(data.bal, .l, G, (y :- l) / G.W)
+    G.IFl = (y :- l) / G.W
     return(l)
 }
 
-`RS' _rd_adjust_median(`Data' data, `Grp' G, `RC' y)
+`RS' _rd_adjust_median(`Grp' G, `RC' y)
 {
     `RS' l, fx
     `RC' z
@@ -3677,12 +3674,12 @@ void _rd_adjust_prep(`Data' data, `Grp' G, `Adj' adj, `Int' get)
     if (G.nose) return(l)
     fx = _rd_kdens(y, G.w, G.wtype>=2, l, "exact") 
     z = (y :<= l)
-    _rd_IF_bal(data.bal, .l, G, (mean(z, G.w) :- z) / (G.W * fx))
+    G.IFl = (mean(z, G.w) :- z) / (G.W * fx)
         // using mean(z) instead of .5 ensures that sum(IF)=0
     return(l)
 }
 
-`RS' _rd_adjust_sd(`Data' data, `Grp' G, `RC' y)
+`RS' _rd_adjust_sd(`Grp' G, `RC' y)
 {
     `RS' v, s, m, c
     
@@ -3701,11 +3698,11 @@ void _rd_adjust_prep(`Data' data, `Grp' G, `Adj' adj, `Int' get)
     m = mean(y, G.w)
     if (G.wtype>=2) c = 1 / (1 - 1/G.N)
     else            c = 1 / (1 - 1/G.W)
-    _rd_IF_bal(data.bal, .s, G, (c:*(y :- m):^2 :- v) / (2 * s * G.W))
+    G.IFs = (c:*(y :- m):^2 :- v) / (2 * s * G.W)
     return(s)
 }
 
-`RS' _rd_adjust_iqrange(`Data' data, `Grp' G, `RC' y)
+`RS' _rd_adjust_iqrange(`Grp' G, `RC' y)
 {
     `RC' q, fx
     `RC' z1, z2
@@ -3715,8 +3712,7 @@ void _rd_adjust_prep(`Data' data, `Grp' G, `Adj' adj, `Int' get)
     fx = _rd_kdens(y, G.w, G.wtype>=2, q, "exact")
     z1 = (y :<= q[1])
     z2 = (y :<= q[2])
-    _rd_IF_bal(data.bal, .s, G, 
-        ((mean(z2, G.w) :- z2)/fx[2] - (mean(z1, G.w) :- z1)/fx[1]) / G.W)
+    G.IFs = ((mean(z2, G.w) :- z2)/fx[2] - (mean(z1, G.w) :- z1)/fx[1]) / G.W
         // using mean(z) instead of .75 and .25 ensures that sum(IF)=0
     return(q[2]-q[1])
 }
@@ -3921,50 +3917,22 @@ void _rd_IF_init(`Data' data, `Int' n)
 {
     data.D.IF = J(data.D.N, n, 0)
     data.R.IF = J(data.R.N, n, 0)
-    if (data.D.bal | data.R.bal) data.bal.T_IF = J(data.bal.T_N, n, 0)
 }
 
-void _rd_IF_bal(`Bal' bal, `Int' j, `Grp' G, `RC' h)
-{   // append contribution to IFs due to balancing
-    `RR' delta
-    
-    if (G.bal) delta = quadcolsum(bal.wb :* h :* bal.Z)'
-    // location
-    if (j==.l) {
-        if (G.bal) {
-            G.IFl     = bal.w :* h + bal.IFZ   * delta
-            bal.T_IFl =              bal.T_IFZ * delta
-        }
-        else G.IFl = h
-    }
-    // scale
-    else if (j==.s) {
-        if (G.bal) {
-            G.IFs     = bal.w :* h + bal.IFZ   * delta
-            bal.T_IFs =              bal.T_IFZ * delta
-        }
-        else G.IFs = h
-    }
-    // other
-    else {
-        if (G.bal) {
-            G.IF[,j]     = G.IF[,j]     + bal.w :* h + bal.IFZ   * delta
-            bal.T_IF[,j] = bal.T_IF[,j] +              bal.T_IFZ * delta
-        }
-        else G.IF[,j] = G.IF[,j] + h
-    }
+void _rd_IF(`Grp' G, `Int' j, `RC' h)
+{   // append contribution to IF
+     G.IF[,j] = G.IF[,j] + h
 }
 
 void _rd_IF_store(`Data' data, `Int' n, | `Bool' append)
 {
     `IntR' idx
-
+    
     idx = _rd_IF_store_idx(n, (args()<3 ? `FALSE' : append))
+    if      (data.D.bal) _rd_IF_store_bal(idx, data.D, data.bal)
+    else if (data.R.bal) _rd_IF_store_bal(idx, data.R, data.bal)
     st_store(., idx, data.D.touse, st_data(., idx, data.D.touse) + data.D.IF[data.D.p,])
     st_store(., idx, data.R.touse, st_data(., idx, data.R.touse) + data.R.IF[data.R.p,])
-    if (data.D.bal | data.R.bal) {
-        st_store(., idx, data.bal.T, st_data(., idx, data.bal.T) + data.bal.T_IF)
-    }
 }
 
 `IntR' _rd_IF_store_idx(`Int' n, `Bool' append)
@@ -3983,6 +3951,19 @@ void _rd_IF_store(`Data' data, `Int' n, | `Bool' append)
     }
     else idx = st_varindex(tokens(st_local("IFs")))
     return(idx)
+}
+
+void _rd_IF_store_bal(`IntR' idx, `Grp' G, `Bal' bal)
+{
+    `Int' j
+    `RR'  delta
+    
+    j = length(idx)
+    for (;j;j--) {
+        delta = quadcolsum(bal.wb :* G.IF[,j] :* bal.Z)'
+        G.IF[,j] = bal.w :* G.IF[,j] + bal.IFZ * delta
+        st_store(., idx[j], bal.T, bal.T_IFZ * delta)
+    }
 }
 
 `RC' _rd_IF_x_to_y(`RC' y, `Grp' D, `Grp' R, `Int' link)
@@ -4158,9 +4139,9 @@ void _rd_PDFd_map(`RC' P1, `RC' P0, `Data' data, `RC' at, `RC' atx, `Int' method
 
 void _rd_PDFd(`RC' p1, `RC' p0, `RC' Y, `RC' w, `RC' atx, `RC' at)
 {
-    p1 = _mm_relrank(Y, w, atx) //_rd_relrank(Y, w, atx, ., 0, 0)
-    p1 = mm_diff(0\p1) // _rd_step(p1)
-    p0 = mm_diff(0\at) // _rd_step(at)
+    p1 = _mm_relrank(Y, w, atx)
+    p1 = mm_diff(0\p1)
+    p0 = mm_diff(0\at)
 }
 
 void _rd_PDFd_rm(`RC' p1, `RC' p0, `RC' at, `RC' atx, `Int' n)
@@ -4192,10 +4173,8 @@ void _rd_PDFd_IF(`RC' p1, `RC' p0, `RC' atx, `Int' n, `Data' data)
     
     _rd_IF_init(data, n)
     for (j=1;j<=n;j++) {
-        _rd_IF_bal(data.bal, j, data.D,
-            1/data.D.W * 1/p0[j]         * ((data.D.y:==atx[j]) :- p1[j]))
-        _rd_IF_bal(data.bal, j, data.R,
-            1/data.R.W * p1[j]/(p0[j]^2) * ((data.R.y:==atx[j]) :- p0[j]))
+        _rd_IF(data.D, j, 1/data.D.W * 1/p0[j] * ((data.D.y:==atx[j]) :- p1[j]))
+        _rd_IF(data.R, j, 1/data.R.W * p1[j]/(p0[j]^2) * (p0[j] :- (data.R.y:==atx[j])))
     }
 }
 
@@ -4301,7 +4280,7 @@ void _rd_PDFc_IF(`RC' b, `RC' at, `Int' n, `PDF' S, `Data' data)
     for (j=1;j<=n;j++) {
         // first part of IF
         z = S.K(S.X(), at[j], h, 1)
-        _rd_IF_bal(data.bal, j, *data.G1, (z :- mean(z, data.G1->w))/data.G1->W)
+        _rd_IF(*data.G1, j, (z :- mean(z, data.G1->w))/data.G1->W)
             // using mean(z) instead of b[j] ensures that sum(IF)=0
         // second part of IF
         _rd_PDFc_IF2(data, j, cdf, fR, 
@@ -4311,7 +4290,7 @@ void _rd_PDFc_IF(`RC' b, `RC' at, `Int' n, `PDF' S, `Data' data)
 
 void _rd_PDFc_IF2(`Data' data, `Int' j, `RM' cdf, `RC' fR, `RC' delta)
 {
-    _rd_IF_bal(data.bal, j, *data.G0, 
+    _rd_IF(*data.G0, j, 
         (_rd_PDFc_IF2_lambda(*data.Y0, cdf, *data.Y1, data.ranks, delta) 
          :- sum(delta :* data.ranks)) / data.G0->W)
     if (!data.adj.true) return
@@ -4399,14 +4378,14 @@ void _rd_PDFc_IF2_adj(`Data' data, `Grp' D, `Grp' R, `Int' j, `RC' dfR)
         // loc:<none> | <none>:loc
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
             tau = sum(dfR :* y) / D.l
-            _rd_IF_bal(data.bal, j, D, -tau * R.l/D.l * D.IFl)
-            _rd_IF_bal(data.bal, j, R,  tau           * R.IFl)
+            _rd_IF(D, j, -tau * R.l/D.l * D.IFl)
+            _rd_IF(R, j,  tau           * R.IFl)
         }
         // shape:<none> | <none>:shape
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
             tau = sum(dfR :* y) / R.l
-            _rd_IF_bal(data.bal, j, D,  tau           * D.IFl)
-            _rd_IF_bal(data.bal, j, R, -tau * D.l/R.l * R.IFl)
+            _rd_IF(D, j,  tau           * D.IFl)
+            _rd_IF(R, j, -tau * D.l/R.l * R.IFl)
         }
         else _error(3498) // not reached
     }
@@ -4415,77 +4394,77 @@ void _rd_PDFc_IF2_adj(`Data' data, `Grp' D, `Grp' R, `Int' j, `RC' dfR)
         // loc:<none> | <none>:loc
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D, -tau * D.IFl)
-            _rd_IF_bal(data.bal, j, R,  tau * R.IFl)
+            _rd_IF(D, j, -tau * D.IFl)
+            _rd_IF(R, j,  tau * R.IFl)
         }
         // loc+scale:<none> | <none>:loc+scale | loc:scale | scale:loc
         else if ((aD==(1,1,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,1,0)) |
                  (aD==(1,0,0) & aR==(0,1,0)) | (aD==(0,1,0) & aR==(1,0,0))) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFl)
-            _rd_IF_bal(data.bal, j, R,  tau           * R.IFl)
+            _rd_IF(D, j, -tau * R.s/D.s * D.IFl)
+            _rd_IF(R, j,  tau           * R.IFl)
             tau = sum(dfR :* (y :- D.l)) / D.s
-            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
-            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
+            _rd_IF(D, j, -tau * R.s/D.s * D.IFs)
+            _rd_IF(R, j,  tau           * R.IFs)
         }
         // scale:<none>
         else if (aD==(0,1,0) & aR==(0,0,0)) {
-            _rd_IF_bal(data.bal, j, D, sum(dfR) * (1-R.s/D.s) * D.IFl)
+            _rd_IF(D, j, sum(dfR) * (1-R.s/D.s) * D.IFl)
             tau = sum(dfR :* (y :- D.l)) / D.s
-            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
-            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
+            _rd_IF(D, j, -tau * R.s/D.s * D.IFs)
+            _rd_IF(R, j,  tau           * R.IFs)
         }
         // <none>:scale
         else if (aD==(0,0,0) & aR==(0,1,0)) {
-            _rd_IF_bal(data.bal, j, R, sum(dfR) * (1-R.s/D.s) * R.IFl)
+            _rd_IF(R, j, sum(dfR) * (1-R.s/D.s) * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / D.s
-            _rd_IF_bal(data.bal, j, D, -tau * R.s/D.s * D.IFs)
-            _rd_IF_bal(data.bal, j, R,  tau           * R.IFs)
+            _rd_IF(D, j, -tau * R.s/D.s * D.IFs)
+            _rd_IF(R, j,  tau           * R.IFs)
         }
         // shape:<none> | <none>:shape
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D,  tau           * D.IFl)
-            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFl)
+            _rd_IF(D, j,  tau           * D.IFl)
+            _rd_IF(R, j, -tau * D.s/R.s * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / R.s
-            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
-            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
+            _rd_IF(D, j,  tau           * D.IFs)
+            _rd_IF(R, j, -tau * D.s/R.s * R.IFs)
         }
         // scale+shape:<none> | <none>:scale+shape
         else if ((aD==(0,1,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,1,1))) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D,  tau * D.IFl)
-            _rd_IF_bal(data.bal, j, R, -tau * R.IFl)
+            _rd_IF(D, j,  tau * D.IFl)
+            _rd_IF(R, j, -tau * R.IFl)
         }
         // loc+shape:<none> | shape:loc
         else if ((aD==(1,0,1) & aR==(0,0,0)) | (aD==(0,0,1) & aR==(1,0,0))) {
-            _rd_IF_bal(data.bal, j, R, sum(dfR) * (1-D.s/R.s) * R.IFl)
+            _rd_IF(R, j, sum(dfR) * (1-D.s/R.s) * R.IFl)
             tau = sum(dfR :* (y :- R.l)) / R.s
-            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
-            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
+            _rd_IF(D, j,  tau           * D.IFs)
+            _rd_IF(R, j, -tau * D.s/R.s * R.IFs)
         }
         // <none>:loc+shape | loc:shape
         else if ((aD==(0,0,0) & aR==(1,0,1)) | (aD==(1,0,0) & aR==(0,0,1))) {
-            _rd_IF_bal(data.bal, j, D, sum(dfR) * (1-D.s/R.s) * D.IFl)
+            _rd_IF(D, j, sum(dfR) * (1-D.s/R.s) * D.IFl)
             tau = sum(dfR :* (y :- D.l)) / R.s
-            _rd_IF_bal(data.bal, j, D,  tau           * D.IFs)
-            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFs)
+            _rd_IF(D, j,  tau           * D.IFs)
+            _rd_IF(R, j, -tau * D.s/R.s * R.IFs)
         }
         // shape:scale
         else if (aD==(0,0,1) & aR==(0,1,0)) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D,  tau * R.s/D.s * D.IFl)
-            _rd_IF_bal(data.bal, j, R, -tau * R.s/D.s * R.IFl)
-            _rd_IF_bal(data.bal, j, D, -tau * (D.l-R.l)*R.s/D.s^2 * D.IFs)
-            _rd_IF_bal(data.bal, j, R,  tau * (D.l-R.l)/D.s       * R.IFs)
+            _rd_IF(D, j,  tau * R.s/D.s * D.IFl)
+            _rd_IF(R, j, -tau * R.s/D.s * R.IFl)
+            _rd_IF(D, j, -tau * (D.l-R.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF(R, j,  tau * (D.l-R.l)/D.s       * R.IFs)
         }
         // scale:shape
         else if (aD==(0,1,0) & aR==(0,0,1)) {
             tau = sum(dfR)
-            _rd_IF_bal(data.bal, j, D,  tau * D.s/R.s * D.IFl)
-            _rd_IF_bal(data.bal, j, R, -tau * D.s/R.s * R.IFl)
-            _rd_IF_bal(data.bal, j, D,  tau * (D.l-R.l)/R.s       * D.IFs)
-            _rd_IF_bal(data.bal, j, R, -tau * (D.l-R.l)*D.s/R.s^2 * R.IFs)
+            _rd_IF(D, j,  tau * D.s/R.s * D.IFl)
+            _rd_IF(R, j, -tau * D.s/R.s * R.IFl)
+            _rd_IF(D, j,  tau * (D.l-R.l)/R.s       * D.IFs)
+            _rd_IF(R, j, -tau * (D.l-R.l)*D.s/R.s^2 * R.IFs)
         }
         else _error(3498) // not reached
     }
@@ -4503,7 +4482,6 @@ void rd_HIST(`Int' n)
     
     // prepare data
     rd_getdata(data)
-    
     // estimation
     b = _rd_HIST(n, data, at, atx)  // also fills in IFs
     
@@ -4524,15 +4502,15 @@ void rd_HIST(`Int' n)
 
 `RC' _rd_HIST(`Int' n, `Data' data, | `RC' at, `RC' atx)
 {   // fills in at and atx if specified
-    `Bool' bal
     `Int'  i
     `RC'   b
-    `RM'   IFD, IFR, IFT
+    `RM'   IFD, IFR
     
     // obtain CDF at thresholds
     at = (1::n-1) / n
     if (st_local("alt")!="") b = _rd_CDF_alt(data, at)
     else                     b = _rd_CDF_ipolate(data, at)
+    
     // obtain IFs of CDF at thresholds
     if (data.nose==0) {
         _rd_CDF_IF(b, at, n-1, data, data.D, data.R, *data.G1, *data.G0)
@@ -4541,30 +4519,22 @@ void rd_HIST(`Int' n)
     b = ((b\1) :- (0\b)) * n
     // compute IFs
     if (data.nose==0) {
-        bal = (data.D.bal | data.R.bal)
         IFD = n * data.D.IF
         IFR = n * data.R.IF
         data.D.IF = J(rows(IFD), n, 0)
         data.R.IF = J(rows(IFR), n, 0)
-        if (bal) {
-            IFT = n * data.bal.T_IF
-            data.bal.T_IF = J(rows(IFT), n, 0)
-        }
         for (i=1;i<=n;i++) {
             if (i==1) {
                 data.D.IF[,i] = IFD[,i]
                 data.R.IF[,i] = IFR[,i]
-                if (bal) data.bal.T_IF[,i] = IFT[,i]
             }
             else if (i==n) {
                 data.D.IF[,i] = -IFD[,i-1]
                 data.R.IF[,i] = -IFR[,i-1]
-                if (bal) data.bal.T_IF[,i] = -IFT[,i-1]
             }
             else {
                 data.D.IF[,i] = IFD[,i] - IFD[,i-1]
                 data.R.IF[,i] = IFR[,i] - IFR[,i-1]
-                if (bal) data.bal.T_IF[,i] = IFT[,i] - IFT[,i-1]
             }
         }
     }
@@ -4743,7 +4713,7 @@ void _rd_CDF_IF(`RC' b, `RC' at, `Int' n, `Data' data, `Grp' D, `Grp' R, `Grp' G
     // compute IFs
     for (j=1;j<=n;j++) {
         z = (G1.y :<= qD[j])
-        _rd_IF_bal(data.bal, j, G1, (z :- mean(z, G1.w)) / G1.W)
+        _rd_IF(G1, j, (z :- mean(z, G1.w)) / G1.W)
             // using mean(z) instead of b[j] ensures that sum(IF)=0
         z = (G0.y :<= qR[j])
         _rd_CDF_IF2(data, G0, D, R, j, qD[j], qR[j], fD[j],
@@ -4760,7 +4730,7 @@ void _rd_CDF_IF2(`Data' data, `Grp' G0, `Grp' D, `Grp' R, `Int' j, `RS' qD, `RS'
     
     // no adjustment
     if (!data.adj.true) {
-        _rd_IF_bal(data.bal, j, G0, fD * IFq)
+        _rd_IF(G0, j, fD * IFq)
         return
     }
     // adjustment settings
@@ -4771,16 +4741,16 @@ void _rd_CDF_IF2(`Data' data, `Grp' G0, `Grp' D, `Grp' R, `Int' j, `RS' qD, `RS'
         // loc:<none> | <none>:loc
         //  t(q) = q * mu_D / mu_R
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
-            _rd_IF_bal(data.bal, j, G0, fD * D.l/R.l         * IFq)
-            _rd_IF_bal(data.bal, j,  D, fD * qR/R.l          * D.IFl)
-            _rd_IF_bal(data.bal, j,  R, fD * -qR * D.l/R.l^2 * R.IFl)
+            _rd_IF(G0, j, fD * D.l/R.l         * IFq)
+            _rd_IF( D, j, fD * qR/R.l          * D.IFl)
+            _rd_IF( R, j, fD * -qR * D.l/R.l^2 * R.IFl)
         }
         // shape:<none> | <none>:shape
         //  t(q) = q * mu_R / mu_D
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
-            _rd_IF_bal(data.bal, j, G0, fD * R.l/D.l         * IFq)
-            _rd_IF_bal(data.bal, j,  D, fD * -qR * R.l/D.l^2 * D.IFl)
-            _rd_IF_bal(data.bal, j,  R, fD * qR/D.l          * R.IFl )
+            _rd_IF(G0, j, fD * R.l/D.l         * IFq)
+            _rd_IF( D, j, fD * -qR * R.l/D.l^2 * D.IFl)
+            _rd_IF( R, j, fD * qR/D.l          * R.IFl )
         }
         else _error(3498) // not reached
     }
@@ -4797,85 +4767,85 @@ void _rd_CDF_IF2(`Data' data, `Grp' G0, `Grp' D, `Grp' R, `Int' j, `RS' qD, `RS'
         // loc:<none> | <none>:loc
         //  t(q) = q - mu_R + mu_D
         if ((aD==(1,0,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,0,0))) {
-            _rd_IF_bal(data.bal, j, G0,  f0 * IFq)
-            _rd_IF_bal(data.bal, j,  D,  f1 * D.IFl)
-            _rd_IF_bal(data.bal, j,  R, -f1 * R.IFl)
+            _rd_IF(G0, j,  f0 * IFq)
+            _rd_IF( D, j,  f1 * D.IFl)
+            _rd_IF( R, j, -f1 * R.IFl)
         }
         // loc+scale:<none> | <none>:loc+scale | loc:scale | scale:loc
         //  t(q) = (q - mu_R)*s_D/s_R + mu_D
         else if ((aD==(1,1,0) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(1,1,0)) |
                  (aD==(1,0,0) & aR==(0,1,0)) | (aD==(0,1,0) & aR==(1,0,0))) {
-            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1                      * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * (q-R.l)/R.s        * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * -D.s/R.s           * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
+            _rd_IF(G0, j, f0 * D.s/R.s            * IFq)
+            _rd_IF( D, j, f1                      * D.IFl)
+            _rd_IF( D, j, f1 * (q-R.l)/R.s        * D.IFs)
+            _rd_IF( R, j, f1 * -D.s/R.s           * R.IFl)
+            _rd_IF( R, j, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
         }
         // scale:<none>
         //  t(q) = (q - mu_D)*s_D/s_R + mu_D
         else if (aD==(0,1,0) & aR==(0,0,0)) {
-            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * (1 - D.s/R.s)      * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * (q-D.l)/R.s        * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * -(q-D.l)*D.s/R.s^2 * R.IFs)
+            _rd_IF(G0, j, f0 * D.s/R.s            * IFq)
+            _rd_IF( D, j, f1 * (1 - D.s/R.s)      * D.IFl)
+            _rd_IF( D, j, f1 * (q-D.l)/R.s        * D.IFs)
+            _rd_IF( R, j, f1 * -(q-D.l)*D.s/R.s^2 * R.IFs)
         }
         // <none>:scale
         //  t(q) = (q - mu_R)*s_D/s_R + mu_R
         else if (aD==(0,0,0) & aR==(0,1,0)) {
-            _rd_IF_bal(data.bal, j, G0, f0 * D.s/R.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * (q-R.l)/R.s        * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * (1 - D.s/R.s)      * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
+            _rd_IF(G0, j, f0 * D.s/R.s            * IFq)
+            _rd_IF( D, j, f1 * (q-R.l)/R.s        * D.IFs)
+            _rd_IF( R, j, f1 * (1 - D.s/R.s)      * R.IFl)
+            _rd_IF( R, j, f1 * -(q-R.l)*D.s/R.s^2 * R.IFs)
         }
         // shape:<none> | <none>:shape
         //  t(q) = (q - mu_D)*s_R/s_D + mu_R
         else if ((aD==(0,0,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,0,1))) {
-            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * -R.s/D.s           * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1                      * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * (q-D.l)/D.s        * R.IFs)
+            _rd_IF(G0, j, f0 * R.s/D.s            * IFq)
+            _rd_IF( D, j, f1 * -R.s/D.s           * D.IFl)
+            _rd_IF( D, j, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF( R, j, f1                      * R.IFl)
+            _rd_IF( R, j, f1 * (q-D.l)/D.s        * R.IFs)
         }
         // scale+shape:<none> | <none>:scale+shape
         //  t(q) = q - mu_D + mu_R
         else if ((aD==(0,1,1) & aR==(0,0,0)) | (aD==(0,0,0) & aR==(0,1,1))) {
-            _rd_IF_bal(data.bal, j, G0,  f0 * IFq)
-            _rd_IF_bal(data.bal, j,  D, -f1 * D.IFl)
-            _rd_IF_bal(data.bal, j,  R,  f1 * R.IFl)
+            _rd_IF(G0, j,  f0 * IFq)
+            _rd_IF( D, j, -f1 * D.IFl)
+            _rd_IF( R, j,  f1 * R.IFl)
         }
         // loc+shape:<none> | shape:loc
         //  t(q) = (q - mu_R)*s_R/s_D + mu_R
         else if ((aD==(1,0,1) & aR==(0,0,0)) | (aD==(0,0,1) & aR==(1,0,0))) {
-            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * -(q-R.l)*R.s/D.s^2 * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * (1 - R.s/D.s)      * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * (q-R.l)/D.s        * R.IFs)
+            _rd_IF(G0, j, f0 * R.s/D.s            * IFq)
+            _rd_IF( D, j, f1 * -(q-R.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF( R, j, f1 * (1 - R.s/D.s)      * R.IFl)
+            _rd_IF( R, j, f1 * (q-R.l)/D.s        * R.IFs)
          }
         // <none>:loc+shape | loc:shape
         //  t(q) = (q - mu_D)*s_R/s_D + mu_D
         else if ((aD==(0,0,0) & aR==(1,0,1)) | (aD==(1,0,0) & aR==(0,0,1))) {
-            _rd_IF_bal(data.bal, j, G0, f0 * R.s/D.s            * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * (1 - R.s/D.s)      * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * (q-D.l)/D.s        * R.IFs)
+            _rd_IF(G0, j, f0 * R.s/D.s            * IFq)
+            _rd_IF( D, j, f1 * (1 - R.s/D.s)      * D.IFl)
+            _rd_IF( D, j, f1 * -(q-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF( R, j, f1 * (q-D.l)/D.s        * R.IFs)
         }
         // shape:scale
         //  t(q) = q + (mu_R-mu_D)*s_R/s_D
         else if (aD==(0,0,1) & aR==(0,1,0)) {
-            _rd_IF_bal(data.bal, j, G0, f0                        * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * -R.s/D.s             * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * -(R.l-D.l)*R.s/D.s^2 * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * R.s/D.s              * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * (R.l-D.l)/D.s        * R.IFs)
+            _rd_IF(G0, j, f0                        * IFq)
+            _rd_IF( D, j, f1 * -R.s/D.s             * D.IFl)
+            _rd_IF( D, j, f1 * -(R.l-D.l)*R.s/D.s^2 * D.IFs)
+            _rd_IF( R, j, f1 * R.s/D.s              * R.IFl)
+            _rd_IF( R, j, f1 * (R.l-D.l)/D.s        * R.IFs)
         }
         // scale:shape
         //  t(q) = q + (mu_R-mu_D)*s_D/s_R
         else if (aD==(0,1,0) & aR==(0,0,1)) {
-            _rd_IF_bal(data.bal, j, G0, f0                        * IFq)
-            _rd_IF_bal(data.bal, j,  D, f1 * -D.s/R.s             * D.IFl)
-            _rd_IF_bal(data.bal, j,  D, f1 * (R.l-D.l)/R.s        * D.IFs)
-            _rd_IF_bal(data.bal, j,  R, f1 * D.s/R.s              * R.IFl)
-            _rd_IF_bal(data.bal, j,  R, f1 * -(R.l-D.l)*D.s/R.s^2 * R.IFs)
+            _rd_IF(G0, j, f0                        * IFq)
+            _rd_IF( D, j, f1 * -D.s/R.s             * D.IFl)
+            _rd_IF( D, j, f1 * (R.l-D.l)/R.s        * D.IFs)
+            _rd_IF( R, j, f1 * D.s/R.s              * R.IFl)
+            _rd_IF( R, j, f1 * -(R.l-D.l)*D.s/R.s^2 * R.IFs)
         }
         else _error(3498) // not reached
     }
@@ -4966,17 +4936,15 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
 
 `RC' _rd_DIV(`Data' data, `SR' stats, `RS' h)
 {
-    `Bool' bal
     `Int'  n, j, k
     `Int'  entropy, chi2, tvd
     `RC'   b, d, at, atx, p0, p1
-    `RM'   IFD, IFR, IFT
+    `RM'   IFD, IFR
     pragma unset p1
     pragma unset p0
     
     // prepare data
     rd_getdata(data)
-    bal = (data.D.bal | data.R.bal)
     
     // compute divergence
     k = length(stats)
@@ -5000,21 +4968,17 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
         if (data.nose==0) {
             IFD = J(rows(data.D.y), k, 0)
             IFR = J(rows(data.R.y), k, 0)
-            if (bal) IFT = J(data.bal.T_N, k, 0)
             if (entropy) {
                 IFD[,entropy] = rowsum((1:+ln(d'))/n :* data.D.IF)
                 IFR[,entropy] = rowsum((1:+ln(d'))/n :* data.R.IF)
-                if (bal) IFT[,entropy] = rowsum((1:+ln(d'))/n :* data.bal.T_IF)
             }
             if (chi2) {
                 IFD[,chi2] = rowsum((d':-1)*(2/n) :* data.D.IF)
                 IFR[,chi2] = rowsum((d':-1)*(2/n) :* data.R.IF)
-                if (bal) IFT[,chi2] = rowsum((d':-1)*(2/n) :* data.bal.T_IF)
             }
             if (tvd) {
                 IFD[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.D.IF)
                 IFR[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.R.IF)
-                if (bal) IFT[,tvd] = rowsum(sign(d':-1)/(2*n) :* data.bal.T_IF)
             }
         }
     }
@@ -5031,29 +4995,22 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
         if (data.nose==0) {
             _rd_IF_init(data, n)
             for (j=1;j<=n;j++) {
-                _rd_IF_bal(data.bal, j, data.D, ((data.D.y:==atx[j]) :- p1[j])/data.D.W)
-                _rd_IF_bal(data.bal, j, data.R, ((data.R.y:==atx[j]) :- p0[j])/data.R.W)
+                _rd_IF(data.D, j, ((data.D.y:==atx[j]) :- p1[j])/data.D.W)
+                _rd_IF(data.R, j, ((data.R.y:==atx[j]) :- p0[j])/data.R.W)
             }
             IFD = J(rows(data.D.y), k, 0)
             IFR = J(rows(data.R.y), k, 0)
-            if (bal) IFT = J(data.bal.T_N, k, 0)
             if (entropy) {
                 IFD[,entropy] = rowsum( (1:+ln(p1):-ln(p0))' :* data.D.IF)
                 IFR[,entropy] = rowsum(-(p1:/p0)' :* data.R.IF)
-                if (data.D.bal) IFT[,entropy] = rowsum( (1:+ln(p1):-ln(p0))' :* data.bal.T_IF)
-                if (data.R.bal) IFT[,entropy] = rowsum(-(p1:/p0)' :* data.bal.T_IF)
             }
             if (chi2) {
                 IFD[,chi2] = rowsum(2*(p1:/p0:-1)' :* data.D.IF)
                 IFR[,chi2] = rowsum((1:-(p1:/p0):^2)' :* data.R.IF)
-                if (data.D.bal) IFT[,chi2] = rowsum(2*(p1:/p0:-1)' :* data.bal.T_IF)
-                if (data.R.bal) IFT[,chi2] = rowsum((1:-(p1:/p0):^2)' :* data.bal.T_IF)
             }
             if (tvd) {
                 IFD[,tvd] = rowsum( sign(p1:-p0)'/2 :* data.D.IF)
                 IFR[,tvd] = rowsum(-sign(p1:-p0)'/2 :* data.R.IF)
-                if (data.D.bal) IFT[,tvd] = rowsum( sign(p1:-p0)'/2 :* data.bal.T_IF)
-                if (data.R.bal) IFT[,tvd] = rowsum(-sign(p1:-p0)'/2 :* data.bal.T_IF)
             }
         }
     }
@@ -5062,7 +5019,6 @@ void rd_DIV(`SS' bnm, `SS' BWnm)
     if (data.nose==0) {
         data.D.IF = IFD
         data.R.IF = IFR
-        if (bal) data.bal.T_IF = IFT
     }
     return(b)
 }
@@ -5141,15 +5097,15 @@ void _rd_MRP_IF(`RR' b, `RC' d, `Data' data)
     }
     
     // MRP
-    _rd_IF_bal(data.bal, 1, data.D, 1/data.G1->W * ((4*abs(d) :- 1) :- b[1]))
+    _rd_IF(data.D, 1, 1/data.G1->W * ((4*abs(d) :- 1) :- b[1]))
     _rd_PDFc_IF2(data, 1, cdf, fR, 4/data.G1->W * (data.G1->w :* sign(d)))
     
     // LRP
-    _rd_IF_bal(data.bal, 2, data.D, 1/data.G1->W * (((8 * -d :* (d:<0)) :- 1) :- b[2]))
+    _rd_IF(data.D, 2, 1/data.G1->W * (((8 * -d :* (d:<0)) :- 1) :- b[2]))
     _rd_PDFc_IF2(data, 2, cdf, fR, -8/data.G1->W * data.G1->w :* (d:<0))
     
     // URP
-    _rd_IF_bal(data.bal, 3, data.D, 1/data.G1->W * (((8 *  d :* (d:>0)) :- 1) :- b[3]))
+    _rd_IF(data.D, 3, 1/data.G1->W * (((8 *  d :* (d:>0)) :- 1) :- b[3]))
     _rd_PDFc_IF2(data, 3, cdf, fR, 8/data.G1->W * data.G1->w :* (d:>0))
 }
 
@@ -5232,7 +5188,7 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
     `SS'   stat
     `RC'   fR
     `RM'   cdf
-    `RM'   IFD, IFR, IFT
+    `RM'   IFD, IFR
     pragma unset cdf
     pragma unset fR
     
@@ -5241,7 +5197,6 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
         _rd_CDF_IF(q, p, rows(p), data, data.R, data.D, *data.G0, *data.G1)
         IFD = data.D.IF
         IFR = data.R.IF
-        if (data.D.bal | data.R.bal) IFT = data.bal.T_IF
     }
     
     // initialize IFs
@@ -5251,9 +5206,9 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
     j = 0
     for (i=1;i<=n;i++) {
         stat = stats[i]
-        if (substr(stat,1,1)=="p") _rd_SUM_q_IF(data, i, IFD, IFR, IFT, ++j)
-        else if (stat=="median")   _rd_SUM_q_IF(data, i, IFD, IFR, IFT, ++j)
-        else if (stat=="iqr")      _rd_SUM_iqr_IF(data, i, IFD, IFR, IFT, ++j)
+        if (substr(stat,1,1)=="p") _rd_SUM_q_IF(data, i, IFD, IFR, ++j)
+        else if (stat=="median")   _rd_SUM_q_IF(data, i, IFD, IFR, ++j)
+        else if (stat=="iqr")      _rd_SUM_iqr_IF(data, i, IFD, IFR, ++j)
         else if (stat=="mean")     _rd_SUM_mean_IF(data, i, b[i], cdf, fR)
         else if (stat=="variance") _rd_SUM_var_IF(data, i, b[i], cdf, fR)
         else if (stat=="sd")       _rd_SUM_sd_IF(data, i, b[i], cdf, fR)
@@ -5261,18 +5216,16 @@ void _rd_SUM_IF(`Data' data, `SR' stats, `RC' q, `RC' p, `RR' b, `Int' n)
     }
 }
 
-void _rd_SUM_q_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `RM' IFT, `Int' j)
+void _rd_SUM_q_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `Int' j)
 {
     data.D.IF[,i] = IFD[,j]
     data.R.IF[,i] = IFR[,j]
-    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = IFT[,j]
 }
 
-void _rd_SUM_iqr_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `RM' IFT, `Int' j)
+void _rd_SUM_iqr_IF(`Data' data, `Int' i, `RM' IFD, `RM' IFR, `Int' j)
 {
     data.D.IF[,i] = IFD[,j] - IFD[,j+1]
     data.R.IF[,i] = IFR[,j] - IFR[,j+1]
-    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = IFT[,j] - IFT[,j+1]
     ++j
 }
 
@@ -5299,7 +5252,7 @@ void _rd_SUM_mean_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
 {
     _rd_SUM_IF_fR(data, cdf, fR)
     // first part of IF
-    _rd_IF_bal(data.bal, i, *data.G1, (data.ranks :- b) / data.G1->W)
+    _rd_IF(*data.G1, i, (data.ranks :- b) / data.G1->W)
     // second part of IF
     _rd_PDFc_IF2(data, i, cdf, fR, (data.wtype ? data.G1->w/data.G1->W : 
         J(data.G1->N, 1, data.G1->w/data.G1->W))) 
@@ -5316,7 +5269,7 @@ void _rd_SUM_var_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
     if (data.wtype>=2) c = 1 / (1 - 1/data.G1->N)
     else               c = 1 / (1 - 1/data.G1->W)
     if (rows(data.ranks)==1) c = 1
-    _rd_IF_bal(data.bal, i, *data.G1, (c:*rdev:^2 :- b) / data.G1->W)
+    _rd_IF(*data.G1, i, (c:*rdev:^2 :- b) / data.G1->W)
     // second part of IF
     _rd_PDFc_IF2(data, i, cdf, fR, 2/data.G1->W * c :* data.G1->w :* rdev)
 }
@@ -5326,7 +5279,6 @@ void _rd_SUM_sd_IF(`Data' data, `Int' i, `RS' b, `RM' cdf, `RC' fR)
     _rd_SUM_var_IF(data, i, b^2, cdf, fR)
     data.D.IF[,i] = data.D.IF[,i] / (2*b)
     data.R.IF[,i] = data.R.IF[,i] / (2*b)
-    if (data.D.bal | data.R.bal) data.bal.T_IF[,i] = data.bal.T_IF[,i] / (2*b)
 }
 
 end

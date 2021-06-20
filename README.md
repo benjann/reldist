@@ -36,6 +36,14 @@ Installation from GitHub:
 
 Main changes:
 
+    19jun2021 (version 1.2.7)
+    - a different approach is now used to take account of balance() when computing 
+      influence functions; this is only about organization of the code, results
+      should not be affected
+    - there was a bug in the computation of the influence functions for the PDF in
+      case of categorical data (one of the components had a wrong sign; in most
+      situations this had no effect on results; this is fixed
+    
     05oct2020 (version 1.2.6)
     - when applying replication-based variance estimation, e.g. vce(bootstrap), 
       reldist pdf used the SJPI bandwidth selector even if a different bandwidth 

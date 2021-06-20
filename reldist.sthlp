@@ -1,5 +1,5 @@
 {smcl}
-{* 27sep2020}{...}
+{* 19jun2021}{...}
 {viewerjumpto "Syntax" "reldist##syntax"}{...}
 {viewerjumpto "Description" "reldist##description"}{...}
 {viewerjumpto "Options" "reldist##options"}{...}
@@ -472,8 +472,8 @@ help for {hi:reldist}{...}
             {cmdab:sh:ape}      adjust shape
 
 {pmore}
-    By default, the specified adjustments
-    are applied to the comparison distribution. However, a colon may be included
+    By default, the specified adjustments are applied to the comparison
+    distribution. However, a colon may be included
     in {it:adjust} to distinguish between distributions: Keywords before the
     colon affect the comparison distribution; keywords after the colon affect
     the reference distribution. For example, type
@@ -638,7 +638,7 @@ help for {hi:reldist}{...}
 {marker boundary}{...}
 {phang2}
     {opt boundary(method)} sets the type of boundary correction method. Choices are
-    {opt ren:orm} (renormalization method), {opt refl:ect} (reflection method), or
+    {opt ren:orm} (renormalization method; the default), {opt refl:ect} (reflection method), or
     {opt lc} (linear combination technique).
 
 {phang2}
@@ -946,7 +946,7 @@ help for {hi:reldist}{...}
 
 {pmore}
     {cmd:vce(svy)} computes standard errors taking the survey design as set by
-    {helpb svyset} into account. The syntax is equivalent the syntax of the {helpb svy}
+    {helpb svyset} into account. The syntax is equivalent to the syntax of the {helpb svy}
     prefix command; that is, {cmd:vce(svy)} is {cmd:reldist}'s way to support
     the {helpb svy} prefix. If {help svy##svy_vcetype:{it:svy_vcetype}} is set to {cmd:linearized}, the
     standard errors are estimated based on influence functions; use
@@ -1071,7 +1071,7 @@ help for {hi:reldist}{...}
     {cmd:e(}{it:name}{cmd:)} instead of computing them from
     {cmd:e(V)}. {cmd:e(}{it:name}{cmd:)} must contain two rows and
     the same number of columns as {cmd:e(b)}. For example, after
-    bootstrap estimation, you could use {cmd:ci(ci_percentile)} to plot
+    bootstrap estimation, you could type {cmd:ci(ci_percentile)} to plot
     percentile confidence intervals. {cmd:ci()} and
     {cmd:level()} are not both allowed.
 
@@ -1118,7 +1118,7 @@ help for {hi:reldist}{...}
     position.
 
 {phang2}
-    {cmd:at} causes {it:numlist} to interpreted as a list of probabilities for which
+    {cmd:at} causes {it:numlist} to be interpreted as a list of probabilities for which
     outcome labels are to be determined. Labels obtained this way will not be pruned.
 
 {phang2}
@@ -1353,6 +1353,16 @@ help for {hi:reldist}{...}
 {pstd}
     Being unionized seems to pay off more for people without college degree than for
     people with college degree.
+
+{pstd}
+    Note that the mean of the relative ranks has an intuitive interpretation: it
+    is equal to the probability that a randomly chosen member of the
+    comparison group has an outcome value that is at least as large at the
+    outcome value of a randomly chosen member of the reference group (this is
+    equivalent to the Gastwirth index; see Gastwirth 1975). In the example
+    above, among people without college degree, the probability that a randomly
+    selected unionized worker earns at least as much as a randomly selected
+    non-unionized worker is 64%.
 
 {dlgtab:Paired data relative distribution (syntax 2)}
 
@@ -1599,11 +1609,15 @@ help for {hi:reldist}{...}
     kernel estimate. Statistics & Probability Letters 16: 397-405.
     {p_end}
 {phang}
-    Handcock, Mark S., Martina Morris (1998). Relative Distribution Methods.
+    Gastwirth, J.L. (1975). Statistical measures of earnings differentials. The 
+    American Statistician 29: 32-35.
+    {p_end}
+{phang}
+    Handcock, M.S., M. Morris (1998). Relative Distribution Methods.
     Sociological Methodology 28: 53-97.
     {p_end}
 {phang}
-    Handcock, Mark S., Martina Morris (1999). Relative Distribution Methods
+    Handcock, M.S., M. Morris (1999). Relative Distribution Methods
     in the Social Sciences. New York: Springer.
     {p_end}
 {phang}
@@ -1631,5 +1645,5 @@ help for {hi:reldist}{...}
 {title:Also see}
 
 {psee}
-    Online: help for {helpb cumul}, {helpb moremata}
+    Online: help for {helpb cumul}, {helpb ppplot} (from SSC), {helpb moremata}
 
