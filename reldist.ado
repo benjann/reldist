@@ -1,4 +1,4 @@
-*! version 1.2.7  18jun2021  Ben Jann
+*! version 1.2.8  30oct2021  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -725,7 +725,10 @@ program _Replay
                 local line`j' "      `xvars'"
             }
         }
-        _coef_table_header, nomodeltest
+        local headopt17 head2left(17) head2right(10)
+        if      c(stata_version)<17            local headopt17
+        else if d(`c(born_date)')<d(13jul2021) local headopt17
+        _coef_table_header, nomodeltest `headopt17'
         local i 0
         if `"`e(by)'"'!="" {
             di as txt `"`line`++i''"' /*
