@@ -36,6 +36,9 @@ Installation from GitHub:
 
 Main changes:
 
+    30oct2021 (version 1.2.8)
+    - fixed header misalignment in Stata 17
+    
     19jun2021 (version 1.2.7)
     - a different approach is now used to take account of balance() when computing 
       influence functions; this is only about organization of the code, results
