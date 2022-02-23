@@ -36,6 +36,10 @@ Installation from GitHub:
 
 Main changes:
 
+    23feb2022 (version 1.3.0)
+    - reldist failed or returned invalid results if used with a string variable in
+      vce(cluster); this is fixed
+    
     23feb2022 (version 1.2.9)
     - observations with missing value for the cluster variable specified in 
       vce(cluster) were not excluded from the estimation sample (except by
