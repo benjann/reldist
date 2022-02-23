@@ -1,4 +1,4 @@
-*! version 1.2.8  30oct2021  Ben Jann
+*! version 1.2.9  23feb2022  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -2223,7 +2223,7 @@ program HIST, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `bal_varlist'
+    markout `touse' `depvar' `clustvar' `bal_varlist'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
@@ -2293,7 +2293,7 @@ program CDF, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `bal_varlist'
+    markout `touse' `depvar' `clustvar' `bal_varlist'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' ""
@@ -2406,7 +2406,7 @@ program DIV, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over' `bal_varlist' `c_bal_varlist'
+    markout `touse' `depvar' `clustvar' `over' `bal_varlist' `c_bal_varlist'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
@@ -2629,7 +2629,7 @@ program MRP, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over' `bal_varlist'
+    markout `touse' `depvar' `clustvar' `over' `bal_varlist'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"
@@ -2707,7 +2707,7 @@ program SUM, eclass
     
     // mark sample
     marksample touse
-    markout `touse' `depvar' `over' `bal_varlist'
+    markout `touse' `depvar' `clustvar' `over' `bal_varlist'
     tempvar touse1 touse0 wvar
     Samplesetup `touse' `touse1' `touse0' `wvar' `depvar' ///
         "`by'" "`swap'" "`refvar'" "`weight'" `"`exp'"' "`over'"

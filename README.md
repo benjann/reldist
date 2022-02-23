@@ -36,8 +36,10 @@ Installation from GitHub:
 
 Main changes:
 
-    30oct2021 (version 1.2.8)
-    - fixed header misalignment in Stata 17
+    23feb2022 (version 1.2.9)
+    - observations with missing value for the cluster variable specified in 
+      vce(cluster) were not excluded from the estimation sample (except by
+      -reldist pdf-); this is fixed
     
     19jun2021 (version 1.2.7)
     - a different approach is now used to take account of balance() when computing 
