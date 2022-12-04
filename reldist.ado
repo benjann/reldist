@@ -1,4 +1,4 @@
-*! version 1.3.0  23feb2022  Ben Jann
+*! version 1.3.1  04dec2022  Ben Jann
 
 capt findfile lmoremata.mlib
 if _rc {
@@ -569,15 +569,16 @@ program Replay
     }
     syntax [, GRaph GRaph2(str asis) * ]
     if `"`graph2'"'!="" local graph graph
-    if c(noisily) {
-        _Replay, `graph' `options'
-    }
+    _Replay, `graph' `options'
     if "`graph'"!="" {
+        tempname rcurrent
+        _return hold `rcurrent'
         GRAPH, `graph2'
+        _return restore `rcurrent'
     }
 end
 
-program _Replay
+program _Replay, rclass
     local subcmd `"`e(subcmd)'"'
     if !inlist(`"`subcmd'"', "pdf", "histogram", "cdf", "divergence", "mrp", "summarize") {
         di as err "last reldist results not found"
@@ -837,6 +838,7 @@ program _Replay
         if _rc==0 {
             di as txt "(evaluation grid stored in {stata matrix list e(at):{bf:e(at)}})"
         }
+        return add
     }
     else if "`notable'"=="" {
         di as txt "({stata reldist:coefficients table} suppressed)"

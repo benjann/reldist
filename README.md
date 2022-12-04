@@ -36,6 +36,14 @@ Installation from GitHub:
 
 Main changes:
 
+    04dec2022 (version 1.3.1)
+    - r() from reldist is now preserved if option -graph- is specified; this ensures
+      that r(table) will be available after running -reldist- with both the -graph-
+      option and the -table- option
+    - the display routine is now executed even if -quietly- is applied to -reldist-,
+      so that r(table) will created even if -quietly- is applied
+    - the display routine will now clear preexisting r() even if -notable- is applied
+
     23feb2022 (version 1.3.0)
     - reldist failed or returned invalid results if used with a string variable in
       vce(cluster); this is fixed
